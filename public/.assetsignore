@@ -1,0 +1,4 @@
+# 不要把测试文件当成站点资源上传。
+# shared/ 必须放在 public/ 里，浏览器才 import 得到（assets.directory 只认这一个目录），
+# 但它旁边的 *.test.mjs 只在 node 里跑，没有任何理由出现在线上。
+*.test.mjs

@@ -1,0 +1,7 @@
+# 仓库里一律存 LF。Cloudflare 的构建机是 Linux，CRLF 会让 shell 脚本报
+# "bad interpreter: /bin/sh^M"。
+* text=auto eol=lf
+
+# 这两类例外：Windows 批处理必须 CRLF，否则 goto/label 可能错乱。
+*.cmd text eol=crlf
+*.bat text eol=crlf

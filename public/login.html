@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>登录 · Needtable</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📊</text></svg>">
+  <!-- 刻意不引 tokens.css / base.css：登录页是未登录者唯一能拿到的页面，
+       它依赖的每个文件都得进 worker/index.js 的白名单，少一个是一个。 -->
+  <link rel="stylesheet" href="/css/login.css">
+  <script src="/js/theme-boot.js"></script>
+</head>
+<body>
+<div class="page">
+  <main class="card">
+    <h1 class="brand"><span class="brand__icon" aria-hidden="true">📊</span><span id="app-name">Needtable</span></h1>
+
+    <!-- ── 登录 ───────────────────────────────────────────────────────── -->
+    <form class="view" id="view-login" hidden novalidate>
+      <p class="sub" data-i18n>账号由管理员开通，本站不开放注册。</p>
+
+      <label class="field">
+        <span class="field__label" data-i18n>邮箱</span>
+        <input id="login-email" type="email" autocomplete="username" spellcheck="false"
+               autocapitalize="off" required>
+      </label>
+
+      <label class="field">
+        <span class="field__label" data-i18n>密码</span>
+        <input id="login-password" type="password" autocomplete="current-password" required>
+      </label>
+
+      <!-- 动态码是全站开关，默认关；/api/auth/config 说开了才显示 -->
+      <label class="field" id="login-code-field" hidden>
+        <span class="field__label" data-i18n>动态码</span>
+        <input id="login-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="7" placeholder="6 位数字" data-i18n-attr="placeholder" spellcheck="false" required>
+      </label>
+
+      <button class="btn" id="login-submit" type="submit" data-i18n>登录</button>
+      <p class="hint" id="login-code-hint" hidden data-i18n>动态码来自你绑定的验证器 App（Google / Microsoft Authenticator 等）。</p>
+    </form>
+
+    <!-- ── 开通账号 / 重置密码 ────────────────────────────────────────── -->
+    <form class="view" id="view-enroll" hidden novalidate>
+      <p class="sub" id="enroll-sub">为 <b id="enroll-email"></b> 设置登录方式。这个链接只能用一次。</p>
+
+      <ol class="steps">
+        <li class="step" id="enroll-step-totp" hidden>
+          <h2 class="step__title" data-i18n>1 · 绑定验证器</h2>
+          <p class="step__text" data-i18n>用验证器 App 扫下面的二维码。扫不了就手动输入密钥。</p>
+          <div class="qr"><canvas id="enroll-qr" aria-label="TOTP 二维码" data-i18n-attr="aria-label"></canvas></div>
+          <p class="secret"><span data-i18n>密钥：</span><code id="enroll-secret"></code></p>
+        </li>
+
+        <li class="step">
+          <h2 class="step__title" id="enroll-pw-title">设置密码</h2>
+          <label class="field">
+            <span class="field__label" data-i18n>新密码</span>
+            <input id="enroll-password" type="password" autocomplete="new-password" required>
+          </label>
+          <label class="field">
+            <span class="field__label" data-i18n>再输一次</span>
+            <input id="enroll-password2" type="password" autocomplete="new-password" required>
+          </label>
+          <p class="hint" data-i18n>至少 12 位。长度比大小写符号混搭管用得多。</p>
+        </li>
+
+        <li class="step" id="enroll-step-verify" hidden>
+          <h2 class="step__title" data-i18n>3 · 验证</h2>
+          <label class="field">
+            <span class="field__label" data-i18n>动态码</span>
+            <input id="enroll-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="7" placeholder="6 位数字" data-i18n-attr="placeholder" spellcheck="false" required>
+          </label>
+          <p class="hint" data-i18n>先输一次，确认二维码确实扫进去了 —— 否则下次登录你会被自己的第二因素挡在门外。</p>
+        </li>
+      </ol>
+
+      <button class="btn" id="enroll-submit" type="submit" data-i18n>完成并进入</button>
+    </form>
+
+    <!-- ── 首次登录 / 管理员重置后：必须先改掉默认密码 ─────────────────── -->
+    <form class="view" id="view-change" hidden novalidate>
+      <p class="sub" data-i18n-html>你正在使用管理员设置的初始密码。请先为 <b id="change-email"></b> 设置自己的新密码，之后才能进入。</p>
+
+      <label class="field" id="change-old-field" hidden>
+        <span class="field__label" data-i18n>当前密码</span>
+        <input id="change-old" type="password" autocomplete="current-password">
+      </label>
+      <label class="field">
+        <span class="field__label" data-i18n>新密码</span>
+        <input id="change-password" type="password" autocomplete="new-password" required>
+      </label>
+      <label class="field">
+        <span class="field__label" data-i18n>再输一次</span>
+        <input id="change-password2" type="password" autocomplete="new-password" required>
+      </label>
+      <p class="hint" data-i18n>至少 12 位，不能和初始密码相同。改完后其它设备上的登录会全部退出。</p>
+
+      <button class="btn" id="change-submit" type="submit" data-i18n>保存并进入</button>
+    </form>
+
+    <!-- ── 纯提示（链接失效等） ───────────────────────────────────────── -->
+    <div class="view" id="view-msg" hidden>
+      <p class="msg" id="msg-text"></p>
+      <a class="btn btn--ghost" href="/login" data-i18n>去登录</a>
+    </div>
+
+    <p class="error" id="error" role="alert" hidden></p>
+    <p class="busy" id="busy" hidden><span class="busy__dot" aria-hidden="true"></span><span id="busy-text">处理中…</span></p>
+  </main>
+
+  <p class="foot" data-i18n>受保护的站点 · 未登录无法访问任何内容</p>
+</div>
+
+<script type="module" src="/js/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Needtable</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📊</text></svg>">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/grid.css">
+  <link rel="stylesheet" href="/css/ribbon.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/doc.css">
+  <script src="/js/theme-boot.js"></script>
+  <!-- modulepreload:start -->
+  <link rel="modulepreload" href="/js/core/lang.js">
+  <link rel="modulepreload" href="/shared/i18n/i18n.js">
+  <link rel="modulepreload" href="/js/main.js">
+  <link rel="modulepreload" href="/js/core/api.js">
+  <link rel="modulepreload" href="/js/core/theme.js">
+  <link rel="modulepreload" href="/shared/theme.js">
+  <link rel="modulepreload" href="/js/core/perm.js">
+  <link rel="modulepreload" href="/js/grid/grid.js">
+  <link rel="modulepreload" href="/js/grid/model.js">
+  <link rel="modulepreload" href="/shared/util/a1.js">
+  <link rel="modulepreload" href="/shared/model/sheet.js">
+  <link rel="modulepreload" href="/shared/formula/parse.js">
+  <link rel="modulepreload" href="/shared/formula/extref.js">
+  <link rel="modulepreload" href="/shared/formula/values.js">
+  <link rel="modulepreload" href="/shared/model/ops.js">
+  <link rel="modulepreload" href="/js/grid/calc.js">
+  <link rel="modulepreload" href="/shared/formula/evaluate.js">
+  <link rel="modulepreload" href="/shared/formula/functions.js">
+  <link rel="modulepreload" href="/shared/formula/numfmt.js">
+  <link rel="modulepreload" href="/js/grid/dropdown.js">
+  <link rel="modulepreload" href="/js/grid/extrefs.js">
+  <link rel="modulepreload" href="/js/grid/viewport.js">
+  <link rel="modulepreload" href="/js/grid/renderer.js">
+  <link rel="modulepreload" href="/js/grid/selection.js">
+  <link rel="modulepreload" href="/js/grid/editor.js">
+  <link rel="modulepreload" href="/js/grid/clipboard.js">
+  <link rel="modulepreload" href="/js/grid/actions.js">
+  <link rel="modulepreload" href="/js/grid/commands.js">
+  <link rel="modulepreload" href="/js/ui/menu.js">
+  <link rel="modulepreload" href="/js/ui/dom.js">
+  <link rel="modulepreload" href="/js/ui/dialog.js">
+  <link rel="modulepreload" href="/js/ai/index.js">
+  <link rel="modulepreload" href="/js/grid/dialogs.js">
+  <link rel="modulepreload" href="/shared/formula/docs.js">
+  <link rel="modulepreload" href="/js/grid/fndoc.js">
+  <link rel="modulepreload" href="/js/grid/chartdraw.js">
+  <link rel="modulepreload" href="/js/grid/pivotcalc.js">
+  <link rel="modulepreload" href="/js/grid/ribbon.js">
+  <link rel="modulepreload" href="/js/grid/assist.js">
+  <link rel="modulepreload" href="/js/grid/chart.js">
+  <link rel="modulepreload" href="/js/grid/menus.js">
+  <link rel="modulepreload" href="/js/core/sync.js">
+  <link rel="modulepreload" href="/js/core/ws.js">
+  <link rel="modulepreload" href="/shared/util/uid.js">
+  <link rel="modulepreload" href="/js/ui/topbar.js">
+  <link rel="modulepreload" href="/js/ui/security.js">
+  <link rel="modulepreload" href="/js/ui/toast.js">
+  <link rel="modulepreload" href="/shared/util/qr.js">
+  <link rel="modulepreload" href="/js/ui/panel.js">
+  <link rel="modulepreload" href="/js/ui/sidebar.js">
+  <link rel="modulepreload" href="/js/ui/home.js">
+  <link rel="modulepreload" href="/js/ui/inline-edit.js">
+  <!-- modulepreload:end -->
+</head>
+<body>
+  <!-- 骨架由 JS 填充。没有内联脚本 —— CSP 里没有 unsafe-inline。 -->
+  <div id="boot" class="boot">
+    <div class="boot__spinner" aria-hidden="true"></div>
+    <p class="boot__text" data-i18n>正在验证身份…</p>
+  </div>
+
+  <div id="app" class="app" hidden>
+    <header id="topbar" class="topbar"></header>
+    <aside id="sidebar" class="sidebar"></aside>
+    <main id="main" class="main"></main>
+  </div>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/js/boot.js" data-app="main"></script>
+</body>
+</html>

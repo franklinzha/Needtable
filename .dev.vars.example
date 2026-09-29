@@ -1,0 +1,30 @@
+# 复制为 .dev.vars 后用于 `wrangler dev`。.dev.vars 已被 .gitignore 忽略。
+#
+# 下面这三个 DEV_BYPASS_* 是本地免登录用的：本地起一次 wrangler dev 就得走一遍
+# 密码 + 动态码太啰嗦，所以直接假装一个已登录用户。
+# 安全约束（见 worker/middleware/auth.js）：它只在 ENVIRONMENT=development 时生效，
+# 而 wrangler.jsonc 里生产环境写死 ENVIRONMENT=production 且没有这个键 —— fail-closed，
+# 线上不可能触发。界面右上角出现橙色 DEV BYPASS 标记时，说明你在旁路模式下。
+ENVIRONMENT=development
+DEV_BYPASS_EMAIL=you@example.com
+DEV_BYPASS_NAME=本地开发者
+
+# ── 下面三把是生产环境的密钥。线上一律用 secret，绝不写进 vars ──────────────
+#     npx wrangler secret put SESSION_SECRET
+#     npx wrangler secret put AUTH_PEPPER
+#     npx wrangler secret put REALTIME_SECRET
+#   （deploy.cmd / scripts/deploy.sh 会在缺失时自动生成并写入，不覆盖已有的值。）
+#
+# 本地只有在想走**真实**登录流程时才需要它们 —— 把上面的 DEV_BYPASS_EMAIL 注释掉，
+# 填好下面两把，然后 `node scripts/user.mjs add 你@example.com --admin --local`
+# 拿一条本地开通链接。随便什么字符串都行，本地库和线上库互不相干。
+
+# 会话 Cookie 的 HMAC 签名密钥。
+SESSION_SECRET=dev-only-insecure-session-secret-change-me
+
+# 口令哈希与 TOTP 密钥加密用的 pepper。
+# 线上换掉它 = 所有人的密码和验证器一起作废，只能逐个 reset 重新开通。
+AUTH_PEPPER=dev-only-insecure-pepper-change-me
+
+# WebSocket ticket 的 HMAC 签名密钥。
+REALTIME_SECRET=dev-only-insecure-secret-change-me

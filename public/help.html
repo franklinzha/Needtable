@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Needtable 使用帮助：表格、公式、透视表、图表、文档、幻灯片、分享权限的用法，以及全部函数说明。" data-i18n-attr="content">
+  <title>帮助中心 · Needtable</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📊</text></svg>">
+  <!-- 只给登录用户（worker/index.js 在鉴权之后才把 /help 改写到这里）；样式自带，不引 tokens.css / base.css -->
+  <link rel="stylesheet" href="/css/help.css">
+  <script src="/js/theme-boot.js"></script>
+  <script type="module" src="/js/boot.js" data-app="help"></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><span aria-hidden="true">📊</span> Needtable</a>
+  <a class="top__title" href="#" data-i18n>帮助中心</a>
+  <input id="q" class="search" type="search" placeholder="搜索文章和函数，如 透视表、分享、vlookup、去空格" autocomplete="off" spellcheck="false" aria-label="搜索帮助" data-i18n-attr="placeholder aria-label">
+  <a class="top__back" href="/" data-i18n>打开 Needtable →</a>
+</header>
+
+<div class="layout">
+  <nav class="nav" id="nav" aria-label="文章目录" data-i18n-attr="aria-label"></nav>
+  <main class="main" id="view" tabindex="-1"></main>
+</div>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "needtable",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Cloudflare 上的在线表格协作平台 —— Sheets x Airtable",
+  "scripts": {
+    "test": "node scripts/test.mjs",
+    "user": "node scripts/user.mjs",
+    "dev": "node scripts/wrangler.mjs dev --remote",
+    "dev:local": "node scripts/wrangler.mjs dev",
+    "migrate": "node scripts/wrangler.mjs d1 migrations apply table-db --remote",
+    "migrate:local": "node scripts/wrangler.mjs d1 migrations apply table-db --local",
+    "deploy": "node scripts/wrangler.mjs deploy",
+    "tail": "node scripts/wrangler.mjs tail",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "wrangler": "^4.47.0"
+  }
+}

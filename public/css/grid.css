@@ -1,0 +1,153 @@
+/* 网格。Canvas 在下、原生滚动容器在上，编辑器再叠一层。
+   这样滚动条、惯性滚动、触控板全部走浏览器原生实现，我们只负责画。 */
+
+/* 纵向 flex：工具条 / 功能区 / 编辑栏 / 主体 / 状态栏；看板、仪表盘隐藏功能区时主体仍撑满 */
+.grid {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--c-surface);
+}
+.grid > :not(.grid__body) { flex-shrink: 0; }
+
+/* ── 工具条 ───────────────────────────────────────────────────────────── */
+.grid__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg-subtle);
+}
+
+.grid__name {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  margin-right: var(--sp-2);
+}
+
+.grid__addr {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+  min-width: 72px;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+}
+
+.grid__btn {
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  padding: 3px var(--sp-3);
+  cursor: pointer;
+}
+.grid__btn:hover { background: var(--c-bg-sunken); }
+.grid__btn:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.grid__btn[aria-pressed="true"] {
+  background: var(--c-accent-soft);
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+.grid__spacer { flex: 1; }
+
+.grid__note {
+  font-size: var(--fs-xs);
+  color: var(--c-warning);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: 1px var(--sp-2);
+}
+
+/* ── 舞台 ─────────────────────────────────────────────────────────────── */
+.grid__stage { position: relative; min-height: 0; overflow: hidden; }
+
+.grid__canvas { position: absolute; inset: 0; z-index: 0; }
+
+.grid__scroll {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: auto;
+  outline: none;
+  overscroll-behavior: contain;   /* 滚到底不要把整页带着弹 */
+}
+.grid__scroll:focus-visible { box-shadow: inset 0 0 0 2px var(--c-accent); }
+
+.grid__sizer { pointer-events: none; }
+
+.grid__layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+
+.grid__editor {
+  position: absolute;
+  pointer-events: auto;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 3px 5px;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 18px;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 2px solid var(--c-accent);
+  border-radius: 2px;
+  box-shadow: var(--shadow-md);
+  outline: none;
+}
+
+/* ── 状态条 ───────────────────────────────────────────────────────────── */
+.grid__status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-1) var(--sp-3);
+  border-top: 1px solid var(--c-border);
+  background: var(--c-bg-subtle);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+  min-height: 24px;
+}
+.grid__stat { font-variant-numeric: tabular-nums; }
+.grid__stat b { font-weight: 600; color: var(--c-text); }
+
+/* 连接状态。前面那个圆点是唯一需要一眼扫到的东西，所以文字弱、点强。 */
+.grid__conn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.grid__conn::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.grid__conn--ok     { color: var(--c-success, #1a7f37); }
+.grid__conn--bad    { color: var(--c-danger, #cf222e); }
+.grid__conn--muted  { color: var(--c-text-muted); }
+.grid__conn--wait   { color: var(--c-warning, #9a6700); }
+/* 连接未稳定时让圆点呼吸，比一行静止的"连接中…"更容易被余光注意到 */
+.grid__conn--wait::before { animation: grid-pulse 1.2s ease-in-out infinite; }
+@keyframes grid-pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) {
+  .grid__conn--wait::before { animation: none; }
+}
+
+@media (max-width: 720px) {
+  .grid__name { width: 100%; }
+}

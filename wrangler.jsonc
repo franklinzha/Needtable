@@ -1,0 +1,112 @@
+{
+	// ─────────────────────────────────────────────────────────────────────────
+	// Table — Cloudflare 在线表格平台
+	//
+	// 所有资源绑定都声明在这里。部署前只需要改两处：routes 的 pattern 和
+	// vars.APP_HOST，都换成你自己的域名（域名要托管在同一个 Cloudflare 账号下）。
+	//
+	// 部署方式：双击项目根目录的 deploy.cmd（Windows）/ scripts/deploy.sh，或 `npm run deploy`。
+	// D1 / KV 不需要提前创建 —— 下面的绑定没写 id，wrangler 会在首次部署时自动
+	// 创建并把 id 回写进本文件。
+	//
+	// 不想把自己的域名、资源 id 提交进仓库？把本文件复制成 wrangler.local.jsonc
+	// （已在 .gitignore 里）再改。deploy.cmd / deploy.sh / npm run deploy /
+	// scripts/user.mjs 都会优先用它。
+	// ─────────────────────────────────────────────────────────────────────────
+	"name": "table",
+	"main": "worker/index.js",
+	"compatibility_date": "2026-09-01",
+	// 自定义域名。hostname 型 Access 应用必须挂在真实域名上才能代理 WebSocket
+	// （Worker 级 Access 策略会把 WS upgrade 请求 403 掉）。
+	"routes": [
+		{
+			"pattern": "table.example.com",
+			"custom_domain": true
+		}
+	],
+	// ⚠️ 安全关键：必须关掉 workers.dev。
+	// 站点只应该有一个入口。多一个 table.<account>.workers.dev 子域，就多一个
+	// 不在你视野里、却同样能打的地址（切回 Access 模式时更致命 —— Access 应用
+	// 按 hostname 生效，那个子域等于整条登录墙的旁路）。关掉它，这扇侧门不存在。
+	"workers_dev": false,
+	"preview_urls": false,
+	// 静态资源。run_worker_first 是本项目最关键的一行安全配置：
+	// 默认情况下静态资源会「先于」Worker 命中，等于 index.html 完全裸奔。
+	// 置 true 后每个请求都先进 Worker，鉴权通过才 env.ASSETS.fetch() 吐资源。
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS",
+		"run_worker_first": true,
+		// 必须是 none。登录页由 Worker 显式改写到 /login.html 再去取；换成
+		// auto-trailing-slash 的话，ASSETS 会把 /login.html 307 回 /login，
+		// Worker 原样转给浏览器 → 浏览器再来 /login → 无限重定向，谁也进不了站。
+		"html_handling": "none",
+		"not_found_handling": "single-page-application"
+	},
+	// 部署版本号。静态资源按它加路径前缀做长缓存（见 worker/index.js serveAsset），免费。
+	"version_metadata": {
+		"binding": "CF_VERSION_METADATA"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		"ENVIRONMENT": "production",
+		"APP_NAME": "Needtable",
+		// 登录方式。
+		//   "password"（当前）应用自建登录页：密码 + TOTP 动态码，
+		//                     账号由管理员用 `npm run user -- add` 签发，不开放注册。
+		//   "access"          Cloudflare Access 边界认证（原设计）。
+		//                     它需要 Zero Trust，而 Zero Trust 要求账户绑定信用卡 ——
+		//                     哪天绑了卡，把这里改成 "access"、填好下面两项、重新
+		//                     deploy 即可切换，两套代码都在仓库里。
+		"AUTH_MODE": "password",
+		// 只有 AUTH_MODE = "access" 时才需要填。
+		// ACCESS_TEAM_DOMAIN 形如 "yourteam.cloudflareaccess.com"（不带 https://）
+		// ACCESS_AUD 是应用详情页的 Application Audience (AUD) Tag
+		// 留空时 Worker 在 access 模式下会 fail-closed 返回 503，绝不放行。
+		"ACCESS_TEAM_DOMAIN": "",
+		"ACCESS_AUD": "",
+		// 用于 CSP 的 connect-src，必须与上面的 routes 一致。
+		"APP_HOST": "table.example.com"
+	},
+	// database_id 不需要手填：wrangler 4.45+ 首次 deploy 时会自动建库，
+	// 并在你确认后把 id 回写到这里。用 Workers Builds（连 Git 自动部署）的话，
+	// 回写后的 id 必须提交进你自己的仓库 —— 否则云端构建会以为库不存在，再去建一个新的。
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "table-db",
+			"migrations_dir": "migrations"
+		}
+	],
+	// KV 仅用于缓存 Access 的 JWKS 公钥（免费额度只有 1000 写/天，
+	// 因此热路径上任何东西都不写 KV —— 用户缓存走 isolate 内存，
+	// ticket 防重放走 DO 自己的 SQLite）。
+	// id 同样由首次 deploy 自动创建并回写。
+	"kv_namespaces": [
+		{
+			"binding": "CACHE"
+		}
+	],
+	// 不用 R2（要绑信用卡）：附件按 1MB 分块存在每张表自己的 DO SQLite 里。
+	// 每张表一个 Durable Object 实例，持有热数据与 oplog。
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "TABLE_DO",
+				"class_name": "TableDO"
+			}
+		]
+	},
+	// new_sqlite_classes（而非 new_classes）才能拿到 SQLite 存储后端，
+	// 这是免费套餐上唯一可用的 DO 形态。
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"TableDO"
+			]
+		}
+	]
+}

@@ -1,0 +1,9 @@
+node_modules/
+.wrangler/
+.dev.vars
+*.log
+.DS_Store
+# 本机部署用的真实配置（自己的域名、D1 / KV id），见 wrangler.jsonc 顶部说明
+wrangler.local.jsonc
+# 同步到公开仓库时的禁用词（scripts/publish.mjs），内容本身也不能公开
+.publish-deny

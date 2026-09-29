@@ -1,0 +1,18 @@
+{
+  // 只做类型检查（JSDoc + checkJS），不产出任何文件、不参与部署。
+  // 运行 `npx tsc --noEmit` 获得 IDE 级别的类型反馈；跳过它也不影响部署。
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["worker/**/*.js", "public/shared/**/*.js", "public/js/**/*.js", "scripts/**/*.mjs"],
+  "exclude": ["public/vendor/**"]
+}

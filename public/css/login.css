@@ -1,0 +1,225 @@
+/*
+ * 登录页样式。刻意自包含，不 import tokens.css ——
+ * 未登录者能取到的文件越少越好，见 worker/index.js 的 PUBLIC_FILES。
+ */
+
+:root {
+  color-scheme: light dark;
+  /* Pastel Dreams，与 tokens.css 同一套值 */
+  --bg: #fffafc;
+  --card: #ffffff;
+  --fg: #3a2d3f;
+  --muted: #6f5a78;
+  --line: #f0dfeb;
+  --accent: #b8377a;
+  --accent-hover: #9c2c67;
+  --accent-fg: #ffffff;
+  --ring: rgba(184, 55, 122, .20);
+  --danger: #c62f55;
+  --danger-soft: rgba(198, 47, 85, .08);
+  --radius: 18px;
+  --shadow: 0 1px 3px rgba(139, 95, 176, .08), 0 16px 40px rgba(139, 95, 176, .14);
+  --dream:
+    radial-gradient(60vw 50vh at 0% 0%, rgba(255, 153, 200, .30), transparent 70%),
+    radial-gradient(55vw 50vh at 100% 0%, rgba(169, 222, 249, .40), transparent 70%),
+    radial-gradient(60vw 55vh at 100% 100%, rgba(228, 193, 249, .38), transparent 70%),
+    radial-gradient(55vw 50vh at 0% 100%, rgba(208, 244, 222, .55), transparent 70%),
+    linear-gradient(180deg, #fffdf2 0%, #fffafc 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1724;
+    --card: #262030;
+    --fg: #f3eaf6;
+    --muted: #c1b1c9;
+    --line: #3a3145;
+    --accent: #ff99c8;
+    --accent-hover: #ffb6d8;
+    --accent-fg: #2a1630;
+    --ring: rgba(255, 153, 200, .28);
+    --danger: #ff8fa6;
+    --danger-soft: rgba(255, 143, 166, .10);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 16px 40px rgba(0, 0, 0, .45);
+    --dream:
+      radial-gradient(60vw 50vh at 0% 0%, rgba(255, 153, 200, .12), transparent 70%),
+      radial-gradient(55vw 50vh at 100% 0%, rgba(169, 222, 249, .08), transparent 70%),
+      radial-gradient(60vw 55vh at 100% 100%, rgba(228, 193, 249, .10), transparent 70%),
+      radial-gradient(55vw 50vh at 0% 100%, rgba(208, 244, 222, .07), transparent 70%),
+      #1c1724;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--dream);
+  background-attachment: fixed;
+  color: var(--fg);
+  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px 16px calc(32px + env(safe-area-inset-bottom, 0px));
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  box-shadow: var(--shadow);
+}
+/* 卡片顶上一道五色彩带 */
+.card { position: relative; overflow: hidden; }
+.card::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px;
+  background: linear-gradient(90deg, #ff99c8, #fcf6bd, #d0f4de, #a9def9, #e4c1f9);
+}
+
+.brand {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand__icon { font-size: 22px; }
+
+.sub { margin: 0 0 20px; color: var(--muted); }
+
+.view { display: block; }
+
+/* ── 表单 ─────────────────────────────────────────────────────────────── */
+
+.field { display: block; margin-bottom: 14px; }
+.field__label { display: block; margin-bottom: 5px; font-size: 13px; color: var(--muted); }
+
+.field input {
+  width: 100%;
+  padding: 9px 11px;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  outline: none;
+}
+.field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+#login-code, #enroll-code { letter-spacing: .35em; font-variant-numeric: tabular-nums; }
+
+.btn {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  color: var(--accent-fg);
+  background: var(--accent);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s;
+}
+.btn:hover { background: var(--accent-hover); box-shadow: 0 4px 14px var(--ring); }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+.btn:disabled { opacity: .55; cursor: progress; }
+.btn--ghost { color: var(--fg); background: transparent; border-color: var(--line); }
+.btn--ghost:hover { background: var(--bg); box-shadow: none; }
+
+.hint { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+
+/* ── 开通流程 ─────────────────────────────────────────────────────────── */
+
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: none; }
+.step { padding: 16px 0; border-top: 1px solid var(--line); }
+.step:first-child { border-top: 0; padding-top: 0; }
+.step__title { margin: 0 0 6px; font-size: 14px; font-weight: 650; }
+.step__text { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+
+.qr {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  background: #ffffff;           /* 二维码底色必须是白的，暗色模式也一样 */
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.qr canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; }
+
+.secret { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); text-align: center; }
+.secret code {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 3px 7px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12.5px;
+  letter-spacing: .08em;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  word-break: break-all;
+}
+
+/* ── 状态 ─────────────────────────────────────────────────────────────── */
+
+.msg { margin: 0 0 4px; }
+
+.error {
+  margin: 16px 0 0;
+  padding: 9px 11px;
+  font-size: 13px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid currentColor;
+  border-radius: 12px;
+}
+
+.busy { margin: 14px 0 0; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.busy__dot {
+  width: 12px; height: 12px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .busy__dot { animation: none; } }
+
+.foot { margin: 0; font-size: 12px; color: var(--muted); }
+
+.lang-select {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: 16px;
+  z-index: 100;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+}
+.lang-select:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+[hidden] { display: none !important; }

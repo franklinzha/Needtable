@@ -1,0 +1,122 @@
+/* 设计令牌。颜色、间距、字号只在这里定义一次，其余样式表一律引用变量。
+   暗色模式通过重定义同名变量实现，组件样式不需要写任何 @media。
+
+   配色：Pastel Dreams —— 蛋白霜黄、薄荷、薰衣草交织的轻盈甜梦。
+     Baby Pink #ff99c8 · Lemon Chiffon #fcf6bd · Frosted Mint #d0f4de · Icy Blue #a9def9 · Mauve #e4c1f9
+   原色都很浅，直接当文字色读不清：文字、强调、焦点用同色系的**加深**版（对白底对比度 ≥ 4.5），
+   原色本身只用来铺底、做点缀和高亮。 */
+
+:root {
+  /* 原色（铺底 / 点缀） */
+  --c-pastel-pink:   #ff99c8;
+  --c-pastel-yellow: #fcf6bd;
+  --c-pastel-mint:   #d0f4de;
+  --c-pastel-blue:   #a9def9;
+  --c-pastel-mauve:  #e4c1f9;
+
+  /* 中性色阶：带一点粉紫的暖白 */
+  --c-bg:            #fffafc;
+  --c-bg-subtle:     #fdf5fa;
+  --c-bg-sunken:     #f7ecf4;
+  --c-surface:       #ffffff;
+  --c-border:        #f0dfeb;
+  --c-border-strong: #dcc5d7;
+
+  --c-text:          #3a2d3f;
+  --c-text-muted:    #6f5a78;
+  --c-text-faint:    #9a88a3;
+
+  /* 品牌与语义色（加深版，保证可读） */
+  --c-accent:        #b8377a;
+  --c-accent-hover:  #9c2c67;
+  --c-accent-soft:   #ffe6f2;
+  --c-accent-2:      #8b5fb0;
+  --c-on-accent:     #ffffff;
+  --c-danger:        #c62f55;
+  --c-success:       #2e7d52;
+  --c-warning:       #9a6b12;
+
+  /* 网格专用（Canvas 也读这几个值） */
+  --c-grid-line:     #f1e3ee;
+  --c-grid-header:   #fdf4f9;
+  --c-grid-selected: rgba(184, 55, 122, 0.10);
+
+  /* 首页 / 登录页的背景：几团淡彩晕开 */
+  --bg-dream:
+    radial-gradient(60vw 50vh at 0% 0%, rgba(255, 153, 200, 0.22), transparent 70%),
+    radial-gradient(55vw 50vh at 100% 0%, rgba(169, 222, 249, 0.30), transparent 70%),
+    radial-gradient(60vw 55vh at 100% 100%, rgba(228, 193, 249, 0.28), transparent 70%),
+    radial-gradient(55vw 50vh at 0% 100%, rgba(208, 244, 222, 0.40), transparent 70%),
+    linear-gradient(180deg, #fffdf2 0%, var(--c-bg) 100%);
+
+  /* 尺寸 */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+
+  /* 圆角偏软 */
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 16px;
+
+  --topbar-h:  48px;
+  --sidebar-w: 240px;
+
+  --fs-xs: 11px; --fs-sm: 12px; --fs-md: 13px; --fs-lg: 15px; --fs-xl: 18px;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC",
+             "Hiragino Sans GB", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+
+  /* 阴影：淡紫调、柔和扩散 */
+  --shadow-sm: 0 1px 3px rgba(139, 95, 176, 0.08);
+  --shadow-md: 0 6px 18px rgba(139, 95, 176, 0.12);
+  --shadow-lg: 0 16px 40px rgba(139, 95, 176, 0.18);
+  --focus-ring: 0 0 0 3px rgba(184, 55, 122, 0.20);
+
+  --z-panel: 100; --z-dialog: 200; --z-toast: 300;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-pastel-pink:   #d97aa8;
+    --c-pastel-yellow: #d9cf86;
+    --c-pastel-mint:   #8fcfa9;
+    --c-pastel-blue:   #7fbcdd;
+    --c-pastel-mauve:  #b995d6;
+
+    /* 深紫夜色，原色在上面反而更亮眼 */
+    --c-bg:            #1c1724;
+    --c-bg-subtle:     #221c2b;
+    --c-bg-sunken:     #17131e;
+    --c-surface:       #262030;
+    --c-border:        #3a3145;
+    --c-border-strong: #4e4259;
+
+    --c-text:          #f3eaf6;
+    --c-text-muted:    #c1b1c9;
+    --c-text-faint:    #8e7f98;
+
+    --c-accent:        #ff99c8;
+    --c-accent-hover:  #ffb6d8;
+    --c-accent-soft:   #43283d;
+    --c-accent-2:      #e4c1f9;
+    --c-on-accent:     #2a1630;
+    --c-danger:        #ff8fa6;
+    --c-success:       #8fe0b3;
+    --c-warning:       #f3dc8a;
+
+    --c-grid-line:     #332a3d;
+    --c-grid-header:   #221c2b;
+    --c-grid-selected: rgba(255, 153, 200, 0.16);
+
+    --bg-dream:
+      radial-gradient(60vw 50vh at 0% 0%, rgba(255, 153, 200, 0.10), transparent 70%),
+      radial-gradient(55vw 50vh at 100% 0%, rgba(169, 222, 249, 0.08), transparent 70%),
+      radial-gradient(60vw 55vh at 100% 100%, rgba(228, 193, 249, 0.10), transparent 70%),
+      radial-gradient(55vw 50vh at 0% 100%, rgba(208, 244, 222, 0.07), transparent 70%),
+      var(--c-bg);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+    --focus-ring: 0 0 0 3px rgba(255, 153, 200, 0.28);
+  }
+}
