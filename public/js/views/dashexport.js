@@ -145,7 +145,7 @@ function drawPivot(ctx, g, p, r, t) {
     return;
   }
   const mat = pivotMatrix(res);
-  const text = (/** @type {{v:any, pct?:boolean}} */ cell) => (typeof cell.v === 'number' ? fmtPivot(cell.v, !!cell.pct, res.opts) : String(cell.v ?? ''));
+  const text = (/** @type {{v:any, pct?:boolean, f?:any}} */ cell) => (typeof cell.v === 'number' ? fmtPivot(cell.v, !!cell.pct, { ...res.opts, ...cell.f }) : String(cell.v ?? ''));
   const ROW = 24, PADX = 8;
   // 列宽：按内容量，封顶 180
   /** @type {number[]} */ const widths = [];

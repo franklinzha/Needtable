@@ -339,5 +339,55 @@ await test('只显示前 N 项：按当前排序取外层前 N 个，总计只�
   assert.equal(P.normPivot(def({ opts: { layout: 'x' } })).opts.layout, 'tabular');
 });
 
+await test('只显示前 N 项：按值字段总计排名（最大 / 最小、指定值字段、作用于列）', () => {
+  // 按标签排序也按值取前 N：华东 20 最大
+  const a = P.computePivot(def({ opts: { top: 1 } }), value, text);
+  assert.deepEqual(a.rows.map((r) => r.keys[0]), ['华东']);
+  assert.deepEqual(a.topInfo, { field: '地区', by: '求和项:销量', dir: 'max' });
+  // 最小：空白 4 < 华北 5
+  const b = P.computePivot(def({ opts: { top: 1, topDir: 'min' } }), value, text);
+  assert.deepEqual(b.rows.map((r) => r.keys[0]), [P.BLANK]);
+  // 按第二个值字段（计数）：华东 3，华北 / 空白 各 1 一样大按标签 → 华北
+  const c = P.computePivot(def({ values: [{ col: 2, agg: 'sum' }, { col: 2, agg: 'count' }], opts: { top: 2, topVal: 1 } }), value, text);
+  assert.deepEqual(c.rows.map((r) => r.keys[0]), ['华北', '华东']);
+  assert.equal(c.topInfo.by, '计数项:销量');
+  // 作用于列：产品 苹果 22 > 香蕉 7
+  const d = P.computePivot(def({ cols: [1], opts: { top: 1, topOn: 'cols' } }), value, text);
+  assert.deepEqual(d.colKeys, [['苹果']]);
+  assert.deepEqual(d.total.total, [22]);
+  assert.equal(d.topInfo.field, '产品');
+  // 旧定义「按值升序」没有 topDir → 取最小
+  assert.equal(P.normPivot(def({ opts: { top: 1, sort: 'valAsc' } })).opts.topDir, 'min');
+});
+
+await test('值显示格式：每个值字段自己的格式和小数位；旧的整表小数位兜底', () => {
+  assert.equal(P.fmtPivot(1234.5, false, { fmt: 'cny' }), '¥1,234.50');
+  assert.equal(P.fmtPivot(-1234.5, false, { fmt: 'usd', dec: 0 }), '-$1,235');
+  assert.equal(P.fmtPivot(12345.6, false, { fmt: 'plain' }), '12345.6');
+  assert.equal(P.fmtPivot(0.123, false, { fmt: 'pct', dec: 1 }), '12.3%');
+  const res = P.computePivot(def({ values: [{ col: 2, agg: 'avg', dec: 3 }, { col: 2, agg: 'avg', fmt: 'cny' }], opts: { dec: 1 } }), value, text);
+  assert.deepEqual(res.valueFmt, [{ fmt: 'auto', dec: 3 }, { fmt: 'cny', dec: 1 }]);
+  assert.equal(P.fmtValue(res, 20 / 3, 0), '6.667');
+  assert.equal(P.fmtValue(res, 20 / 3, 1), '¥6.7');
+  const m = P.pivotMatrix(res);
+  assert.deepEqual(m.rows[1][2].f, { fmt: 'cny', dec: 1 });
+  const n = P.normPivot(def({ values: [{ col: 2, fmt: 'bad', dec: 9 }, { col: 2, fmt: 'auto' }] })).values;
+  assert.deepEqual(n, [{ col: 2, agg: 'sum', show: 'none' }, { col: 2, agg: 'sum', show: 'none' }]);
+});
+
+await test('重命名：值字段 name、行列字段 labels；插删列时 labels 跟着平移', () => {
+  const res = P.computePivot(def({ cols: [1], values: [{ col: 2, agg: 'sum', name: '  总销量 ' }], labels: { 0: '区域', 1: '' } }), value, text);
+  assert.deepEqual(res.valueLabels, ['总销量']);
+  assert.deepEqual(res.rowFields, ['区域']);
+  assert.deepEqual(res.colFields, ['产品']);
+  const p = def({ labels: { 0: '区域' } });
+  assert.equal(P.fieldName(p, 0, text, String), '区域');
+  assert.equal(P.fieldName(p, 0, text, String, true), '地区');
+  const out = adjustProps({ pivots: [def({ labels: { 0: '区域', 2: '量' } })] }, 'col', 1, 1);
+  assert.deepEqual(out.pivots[0].labels, { 0: '区域', 3: '量' });
+  const del = adjustProps({ pivots: [def({ labels: { 0: '区域', 2: '量' } })] }, 'col', 0, -1);
+  assert.deepEqual(del.pivots[0].labels, { 1: '量' });
+});
+
 if (failures) { console.error(`\n${failures} 个透视表测试失败`); process.exit(1); }
 console.log('\n透视表 / 仪表盘布局测试全部通过');

@@ -117,10 +117,16 @@ function pivotSheet(mat, opts, book) {
   const dec = opts.dec ?? null;
   const HEAD_BG = '#F7ECF4', TOTAL_BG = '#FDF4F9', LINE = '#DCC5D7';
   const bd = { b: LINE };
-  const nf = (/** @type {number} */ v, /** @type {boolean} */ pct) => {
-    const d = dec ?? (pct ? 2 : Number.isInteger(v) ? 0 : 2);
+  /** 值字段自己的格式（f）优先，其次整表小数位 */
+  const nf = (/** @type {number} */ v, /** @type {boolean} */ pct, /** @type {{fmt?: string, dec?: number|null} | undefined} */ f) => {
+    const fmt = f?.fmt ?? 'auto';
+    const money = fmt === 'cny' || fmt === 'usd';
+    const d = f?.dec ?? dec ?? (pct || money || fmt === 'pct' ? 2 : Number.isInteger(v) ? 0 : 2);
     const frac = d > 0 ? '.' + '0'.repeat(d) : '';
-    return pct ? '0' + frac + '%' : '#,##0' + frac;
+    if (pct || fmt === 'pct') return '0' + frac + '%';
+    if (fmt === 'plain') return '0' + frac;
+    if (money) return (fmt === 'cny' ? '¥' : '$') + '#,##0' + frac;
+    return '#,##0' + frac;
   };
   let width = 0;
   const rows = mat.rows.map((cells, r) => {
@@ -132,7 +138,7 @@ function pivotSheet(mat, opts, book) {
     cells.forEach((cell, c) => {
       const ref = cellRef(r, c);
       if (typeof cell.v === 'number' && Number.isFinite(cell.v)) {
-        const s = book.xf({ b: bold, bg, bd, nf: nf(cell.v, !!cell.pct) });
+        const s = book.xf({ b: bold, bg, bd, nf: nf(cell.v, !!cell.pct, cell.f) });
         xml += '<c r="' + ref + '" s="' + s + '"><v>' + cell.v + '</v></c>';
       } else {
         const merged = c < mat.keyCols && (mat.merges ?? []).some((m) => m[0] === r && m[1] === c);

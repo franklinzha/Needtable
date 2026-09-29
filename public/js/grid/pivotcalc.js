@@ -3,9 +3,13 @@
  *
  * 定义存在 props.pivots（每张表最多 MAX_PIVOTS 个），每个是
  *   { id, name, range:[r0,c0,r1,c1], header,
- *     filters:[列号…], rows:[列号…], cols:[列号…], values:[{col, agg, show}],
- *     hide:{ 列号: [被筛掉的取值…] }, opts:{ rowTotals, colTotals, subtotals, sort, sortVal, sortCol, dec, empty,
- *                                          layout, repeat, subTop, blank, merge, top } }
+ *     filters:[列号…], rows:[列号…], cols:[列号…], values:[{col, agg, show, fmt?, dec?, name?}],
+ *     labels:{ 列号: 自定义字段名 }, hide:{ 列号: [被筛掉的取值…] },
+ *     opts:{ rowTotals, colTotals, subtotals, sort, sortVal, sortCol, dec, empty,
+ *            layout, repeat, subTop, blank, merge, top, topOn, topVal, topDir } }
+ *   值字段的 fmt / dec 是它自己的数字格式和小数位（opts.dec 是旧版的整表小数位，只在值字段没设时兜底）；
+ *   name 是值字段的自定义名称，labels 是行 / 列 / 筛选字段的自定义名称。
+ *   top：只保留 topOn（rows / cols）最外层字段里、按第 topVal 个值字段的总计最大（topDir = max）或最小的前 N 项。
  *   sort 为 valDesc / valAsc 时，sortVal 指按第几个值字段排，sortCol 指按哪一列（列字段取值数组；null = 总计列）。
  * 和 Excel 一样四个区域：筛选 / 列 / 行 / 值。hide 对任何字段都生效（筛选区的字段、行列字段的 ▾）。
  * 旧定义只有 col（单个列字段），读的时候当 cols:[col]。
@@ -28,12 +32,20 @@ export const PIVOT_SHOW = /** @type {const} */ ([
 export const PIVOT_SORTS = /** @type {const} */ ([
   ['asc', tt('按标签升序')], ['desc', tt('按标签降序')], ['valDesc', tt('按值降序')], ['valAsc', tt('按值升序')],
 ]);
+/** 值的数字格式。 */
+export const PIVOT_FMTS = /** @type {const} */ ([
+  ['auto', tt('常规（千分位）')], ['plain', tt('数值（无千分位）')], ['pct', tt('百分比')], ['cny', tt('货币 ¥')], ['usd', tt('货币 $')],
+]);
 /** 报表布局（和 Excel「设计 → 报表布局」一样）。 */
 export const PIVOT_LAYOUTS = /** @type {const} */ ([
   ['tabular', tt('表格形式')], ['outline', tt('大纲形式')], ['compact', tt('压缩形式')],
 ]);
 const AGG_LABEL = Object.fromEntries(PIVOT_AGGS);
 const SHOW_LABEL = Object.fromEntries(PIVOT_SHOW);
+const FMT_LABEL = Object.fromEntries(PIVOT_FMTS);
+const decOk = (d) => Number.isInteger(d) && d >= 0 && d <= 6;
+/** 自定义名称清洗：去首尾空白、最长 30 字，空串 = 没设。 @param {unknown} s */
+const cleanLabel = (s) => (typeof s === 'string' ? s.replace(/s+/g, ' ').trim().slice(0, 30) : '');
 /** 各区域最多几个字段。 */
 export const PIVOT_LIMITS = { filters: 4, rows: 3, cols: 2, values: 6 };
 /** 行 / 列分组上限：再多就不是「透视」而是原表了，也画不动。 */
@@ -63,20 +75,32 @@ export function normPivot(p) {
   const cols = Array.isArray(p?.cols) ? ints(p.cols) : Number.isInteger(p?.col) ? [p.col] : [];
   const values = (Array.isArray(p?.values) ? p.values : [])
     .filter((v) => Number.isInteger(v?.col))
-    .map((v) => ({ col: v.col, agg: AGG_LABEL[v.agg] ? v.agg : 'sum', show: SHOW_LABEL[v.show] ? v.show : 'none' }));
+    .map((v) => {
+      /** @type {{col:number, agg:string, show:string, fmt?:string, dec?:number, name?:string}} */
+      const out = { col: v.col, agg: AGG_LABEL[v.agg] ? v.agg : 'sum', show: SHOW_LABEL[v.show] ? v.show : 'none' };
+      if (FMT_LABEL[v.fmt] && v.fmt !== 'auto') out.fmt = v.fmt;
+      if (decOk(v.dec)) out.dec = v.dec;
+      const name = cleanLabel(v.name);
+      if (name) out.name = name;
+      return out;
+    });
+  /** @type {Record<string, string>} */ const labels = {};
+  if (p?.labels && typeof p.labels === 'object') {
+    for (const [k, v] of Object.entries(p.labels)) { const s = cleanLabel(v); if (s && Number.isInteger(Number(k))) labels[k] = s; }
+  }
   /** @type {Record<string, string[]>} */ const hide = {};
   if (p?.hide && typeof p.hide === 'object') {
     for (const [k, v] of Object.entries(p.hide)) if (Array.isArray(v) && v.length) hide[k] = v.map(String);
   }
   const o = p?.opts ?? {};
   return {
-    ...p, filters: ints(p?.filters), rows: ints(p?.rows), cols, values, hide,
+    ...p, filters: ints(p?.filters), rows: ints(p?.rows), cols, values, hide, labels,
     opts: {
       rowTotals: o.rowTotals !== false, colTotals: o.colTotals !== false, subtotals: !!o.subtotals,
       sort: PIVOT_SORTS.some(([k]) => k === o.sort) ? o.sort : 'asc',
       sortVal: Number.isInteger(o.sortVal) && o.sortVal >= 0 && o.sortVal < values.length ? o.sortVal : 0,
       sortCol: Array.isArray(o.sortCol) ? o.sortCol.map(String) : null,
-      dec: Number.isInteger(o.dec) && o.dec >= 0 && o.dec <= 6 ? o.dec : null,
+      dec: decOk(o.dec) ? o.dec : null,
       empty: typeof o.empty === 'string' ? o.empty.slice(0, 10) : '',
       layout: PIVOT_LAYOUTS.some(([k]) => k === o.layout) ? o.layout : 'tabular',
       /** 重复所有项目标签：外层标签每一行都写 */
@@ -87,8 +111,15 @@ export function normPivot(p) {
       blank: !!o.blank,
       /** 合并相同的外层标签（仅表格形式） */
       merge: !!o.merge,
-      /** 只显示最外层的前 N 项（按当前排序），0 = 全部 */
+      /** 只显示最外层的前 N 项，0 = 全部 */
       top: Number.isInteger(o.top) && o.top > 0 ? Math.min(o.top, 1000) : 0,
+      /** 前 N 项作用在行（最外层行字段）还是列（最外层列字段） */
+      topOn: o.topOn === 'cols' ? 'cols' : 'rows',
+      /** 按第几个值字段的总计排名；旧定义没有时跟着「按值排序」的字段 */
+      topVal: Number.isInteger(o.topVal) && o.topVal >= 0 && o.topVal < values.length ? o.topVal
+        : Number.isInteger(o.sortVal) && o.sortVal >= 0 && o.sortVal < values.length ? o.sortVal : 0,
+      /** 取最大的（max）还是最小的（min）N 项；旧定义按升序排值时是最小 */
+      topDir: o.topDir === 'min' || (o.topDir == null && o.sort === 'valAsc') ? 'min' : 'max',
     },
   };
 }
@@ -142,14 +173,18 @@ export function validPivot(p) {
   return !!p && Array.isArray(p.range) && p.range.length === 4 && p.range.every(Number.isInteger);
 }
 
-/** 字段显示名：有表头取表头文字，否则「列 X」。 */
-export function fieldName(p, c, text, colTitle) {
+/** 字段显示名：自定义名称 > 表头文字 > 「列 X」。raw = 不看自定义名称（字段清单里用）。 */
+export function fieldName(p, c, text, colTitle, raw = false) {
+  const custom = raw ? '' : cleanLabel(p.labels?.[c]);
+  if (custom) return custom;
   const t = p.header ? String(text(p.range[0], c) ?? '').trim() : '';
   return t || colTitle(c);
 }
 
 /** 值字段的标题：「求和项:销量」「求和项:销量（列汇总的百分比）」。 */
 export function valueLabel(v, name) {
+  const custom = cleanLabel(v.name);
+  if (custom) return custom;
   const agg = AGG_LABEL[v.agg] ?? tt('求和');
   return v.show && v.show !== 'none' ? tt('{agg}项:{name}（{show}）', { agg, name, show: SHOW_LABEL[v.show] }) : tt('{agg}项:{name}', { agg, name });
 }
@@ -202,12 +237,16 @@ export function computePivot(def, value, text, colTitle = (c) => tt('列{n}', { 
     valueLabels: values.map((v) => valueLabel(v, name(v.col))),
     /** 每个值字段是不是按百分比显示 */
     valuePct: values.map((v) => v.show !== 'none'),
+    /** 每个值字段的数字格式和小数位 */
+    valueFmt: values.map((v) => ({ fmt: v.fmt ?? 'auto', dec: v.dec ?? p.opts.dec })),
     /** 列分组，每项是各层的取值；没有列字段时只有一个 [] */
     colKeys: /** @type {string[][]} */ ([]),
     /** sub 为小计行所在层（0 起），普通行没有；head = 大纲 / 压缩形式里外层项目自己的那一行（不显示汇总时值全空） */
     rows: /** @type {{keys:string[], cells:(number|null)[], total:(number|null)[], sub?:number, head?:boolean}[]} */ ([]),
     /** 「只显示前 N 项」隐藏掉的外层项目数 */
     topHidden: 0,
+    /** 「只显示前 N 项」的说明：作用的字段、依据的值、最大 / 最小 */
+    topInfo: /** @type {{field:string, by:string, dir:string} | null} */ (null),
     total: { cells: /** @type {(number|null)[]} */ ([]), total: /** @type {(number|null)[]} */ ([]) },
     opts: p.opts,
     truncated: false, error: '',
@@ -226,6 +265,7 @@ export function computePivot(def, value, text, colTitle = (c) => tt('列{n}', { 
   /** 前缀分组（小计 / 按值排序用），键是前缀的 join @type {Map<string, ReturnType<typeof newGroup>>} */ const prefixes = new Map();
   /** @type {Map<string, ReturnType<typeof newAccs>>} */ const colAll = new Map();
   /** @type {Map<string, string[]>} */ const colKeyOf = new Map();
+  /** 最外层列字段每个取值的累加器（前 N 项按列排名用） @type {Map<string, ReturnType<typeof newAccs>>} */ const colOuter = new Map();
   const grand = newAccs();
   const SEP = '\u0000';
 
@@ -267,7 +307,9 @@ export function computePivot(def, value, text, colTitle = (c) => tt('列{n}', { 
     }
     let ca = colAll.get(ck);
     if (!ca) { ca = newAccs(); colAll.set(ck, ca); }
-    values.forEach((v, i) => { const x = value(r, v.col); feed(ca[i], x); feed(grand[i], x); });
+    /** @type {ReturnType<typeof newAccs> | undefined} */ let co;
+    if (colFields.length && p.opts.top) { co = colOuter.get(cks[0]); if (!co) { co = newAccs(); colOuter.set(cks[0], co); } }
+    values.forEach((v, i) => { const x = value(r, v.col); feed(ca[i], x); feed(grand[i], x); if (co) feed(co[i], x); });
   }
 
   const desc = p.opts.sort === 'desc';
@@ -305,15 +347,29 @@ export function computePivot(def, value, text, colTitle = (c) => tt('列{n}', { 
     return cmpKeys(a.keys, b.keys);
   });
 
-  // 只显示前 N 项：把其余的外层项目当作被筛掉，重算一遍（总计也只算显示的，和 Excel 的值筛选一样）
-  if (p.opts.top && depth) {
-    const outer = [...new Set(sorted.map((g) => g.keys[0]))];
-    if (outer.length > p.opts.top) {
-      const c = rowFields[0];
-      const hide = { ...p.hide, [c]: [...(p.hide[c] ?? []), ...outer.slice(p.opts.top)] };
+  // 只显示前 N 项：最外层行（或列）字段的各项按某个值字段的总计排名，其余当作被筛掉，重算一遍
+  // （总计也只算显示的，和 Excel 的「前 10 项」值筛选一样）。没有值字段时按当前排序取前 N 个。
+  const onCols = colFields.length > 0 && (p.opts.topOn === 'cols' || !depth);
+  if (p.opts.top && (depth || onCols)) {
+    const tv = p.opts.topVal < nv ? p.opts.topVal : 0;
+    /** @type {[string, number|null][]} */ let items;
+    if (onCols) items = [...new Set(out.colKeys.map((k) => k[0]))].map((k) => [k, nv ? result(colOuter.get(k)?.[tv], values[tv].agg) : null]);
+    else {
+      items = [...new Set(sorted.map((g) => g.keys[0]))]
+        .map((k) => [k, nv ? result((depth === 1 ? groups.get(k) : prefixes.get(k))?.all[tv], values[tv].agg) : null]);
+    }
+    if (nv) {
+      const s = p.opts.topDir === 'min' ? 1 : -1;
+      // 空值永远排在最后；一样大按标签
+      items.sort((a, b) => (a[1] == null ? (b[1] == null ? 0 : 1) : b[1] == null ? -1 : s * (a[1] - b[1])) || keyCmp(a[0], b[0]));
+    }
+    if (items.length > p.opts.top) {
+      const c = onCols ? colFields[0] : rowFields[0];
+      const hide = { ...p.hide, [c]: [...(p.hide[c] ?? []), ...items.slice(p.opts.top).map((x) => x[0])] };
       const res = computePivot({ ...p, hide, opts: { ...p.opts, top: 0 } }, value, text, colTitle);
       res.opts = p.opts;
-      res.topHidden = outer.length - p.opts.top;
+      res.topHidden = items.length - p.opts.top;
+      res.topInfo = { field: name(c), by: nv ? out.valueLabels[tv] : '', dir: p.opts.topDir };
       return res;
     }
   }
@@ -385,14 +441,29 @@ function applyShow(out, values) {
 }
 
 /**
- * 数字显示：整数加千分位，小数默认最多两位；百分比带 %。
- * @param {number | null} n @param {boolean} [pct] @param {{dec?:number|null, empty?:string}} [opts]
+ * 数字显示：默认整数加千分位，小数最多两位；按百分比显示（值显示方式）或格式是百分比时带 %。
+ * fmt：auto 常规（千分位）/ plain 无千分位 / pct 百分比 / cny ¥ / usd $。
+ * @param {number | null} n @param {boolean} [pct] @param {{dec?:number|null, empty?:string, fmt?:string}} [opts]
  */
 export function fmtPivot(n, pct = false, opts = {}) {
   if (n == null || !Number.isFinite(n)) return opts.empty ?? '';
   const dec = opts.dec ?? null;
+  const fmt = opts.fmt ?? 'auto';
+  /** @type {Intl.NumberFormatOptions} */
   const o = dec == null ? { maximumFractionDigits: 2 } : { minimumFractionDigits: dec, maximumFractionDigits: dec };
-  return pct ? (n * 100).toLocaleString('zh-CN', o) + '%' : n.toLocaleString('zh-CN', o);
+  if (pct || fmt === 'pct') return (n * 100).toLocaleString('zh-CN', o) + '%';
+  if (fmt === 'plain') return n.toLocaleString('zh-CN', { ...o, useGrouping: false });
+  if (fmt === 'cny' || fmt === 'usd') {
+    // 货币默认两位小数
+    const c = dec == null ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : o;
+    return (n < 0 ? '-' : '') + (fmt === 'cny' ? '¥' : '$') + Math.abs(n).toLocaleString('zh-CN', c);
+  }
+  return n.toLocaleString('zh-CN', o);
+}
+
+/** 第 i 个值字段的数字显示。 @param {any} res computePivot 的结果 @param {number | null} n @param {number} i */
+export function fmtValue(res, n, i) {
+  return fmtPivot(n, res.valuePct[i], { ...res.opts, ...res.valueFmt?.[i] });
 }
 
 /**
@@ -459,10 +530,10 @@ export function pivotLayout(res) {
 /**
  * 把算好的透视表摊成一个二维表：导出 Excel 的单独工作表、仪表盘导出图片都用它。
  * 布局和页面上的 HTML 表一致（见 pivotLayout）。
- * 单元格：{ v: 字符串 / 数字 / null, pct?: 是百分比 }；kinds[i] 标出第 i 行是表头 / 外层项目 / 小计 / 空行 / 总计。
+ * 单元格：{ v: 字符串 / 数字 / null, pct?: 是百分比, f?: 这个值字段的 {fmt, dec} }；kinds[i] 标出第 i 行是表头 / 外层项目 / 小计 / 空行 / 总计。
  * merges：[r0, c0, r1, c1] 要合并的单元格。
  * @param {ReturnType<typeof computePivot>} res
- * @returns {{ rows: {v: string|number|null, pct?: boolean}[][], kinds: (''|'head'|'group'|'sub'|'blank'|'total')[], keyCols: number, merges: number[][] }}
+ * @returns {{ rows: {v: string|number|null, pct?: boolean, f?: {fmt: string, dec: number|null}}[][], kinds: (''|'head'|'group'|'sub'|'blank'|'total')[], keyCols: number, merges: number[][] }}
  */
 export function pivotMatrix(res) {
   const o = res.opts;
@@ -473,7 +544,7 @@ export function pivotMatrix(res) {
   const keyCols = lay.keyCols;
   const nk = res.colKeys.length;
   const totalCol = ncf > 0 && o.rowTotals;
-  /** @type {{v: string|number|null, pct?: boolean}[][]} */ const rows = [];
+  /** @type {{v: string|number|null, pct?: boolean, f?: {fmt: string, dec: number|null}}[][]} */ const rows = [];
   /** @type {(''|'head'|'group'|'sub'|'blank'|'total')[]} */ const kinds = [];
   const T = (/** @type {string} */ v) => ({ v });
   const rowHeads = () => (!depth ? [T('')] : lay.compact ? [T(res.rowFields.join(' / '))] : res.rowFields.map(T));
@@ -502,7 +573,7 @@ export function pivotMatrix(res) {
   }
   const heads = rows.length;
 
-  const num = (/** @type {number|null} */ n, /** @type {number} */ i) => ({ v: n, pct: res.valuePct[i] });
+  const num = (/** @type {number|null} */ n, /** @type {number} */ i) => ({ v: n, pct: res.valuePct[i], f: res.valueFmt[i] });
   const data = (/** @type {any} */ row) => {
     if (!ncf) return row.total.map(num);
     const out = row.cells.map((/** @type {number|null} */ n, /** @type {number} */ j) => num(n, j % Math.max(1, nv)));

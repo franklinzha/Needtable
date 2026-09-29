@@ -3,16 +3,17 @@
  * 数据实时取自表格（计算后的值），表格一改这里就重算 —— 透视表本身不存任何结果。
  *
  * 和 Excel 一样：右侧「字段列表」列出数据区域的全部字段，勾选或拖到 筛选 / 列 / 行 / 值 四个区域；
- * 点区域里的字段可以改汇总方式（求和、计数、去重计数、中位数…）和值显示方式（行 / 列 / 总计的百分比）、
- * 挪位置或移除。「高级设置」管总计、分类汇总、排序、小数位。筛选字段显示在表格上方，
+ * 点区域里的字段可以改汇总方式（求和、计数、去重计数、中位数…）、值显示方式（行 / 列 / 总计的百分比）、
+ * 值显示格式（数字格式和小数位）、重命名、挪位置或移除。「高级设置」管总计、分类汇总、布局、前 N 项、排序。筛选字段显示在表格上方，
  * 行 / 列字段标题上的 ▾ 也能筛选取值。每次改动都是一次 setProp，可撤销、实时同步给协作者。
  */
 
 import { h, select, placeNear } from '../ui/dom.js';
 import { openMenu } from '../ui/menu.js';
+import { promptDialog } from '../ui/dialog.js';
 import {
-  computePivot, pivotLayout, fmtPivot, validPivot, normPivot, fieldName, valueLabel, fieldValues, looksNumeric, moveField, fieldUsed,
-  PIVOT_AGGS, PIVOT_SHOW, PIVOT_SORTS, PIVOT_LAYOUTS, PIVOT_LIMITS, BLANK, MAX_FIELD_VALUES,
+  computePivot, pivotLayout, fmtValue, validPivot, normPivot, fieldName, valueLabel, fieldValues, looksNumeric, moveField, fieldUsed,
+  PIVOT_AGGS, PIVOT_SHOW, PIVOT_FMTS, PIVOT_SORTS, PIVOT_LAYOUTS, PIVOT_LIMITS, BLANK, MAX_FIELD_VALUES,
 } from '../grid/pivotcalc.js';
 import { rangeName, colName } from '../../shared/util/a1.js';
 import { t as tt } from '../../shared/i18n/i18n.js';
@@ -44,7 +45,7 @@ export function pivotTable(g, p, ui = {}) {
   const totalCol = ncf > 0 && o.rowTotals;
   const th = (text, props = {}) => h('th', { text, ...props });
   const span = (n) => (n > 1 ? String(n) : null);
-  const fmt = (n, i) => fmtPivot(n, res.valuePct[i], o);
+  const fmt = (n, i) => fmtValue(res, n, i);
   const td = (n, i) => h('td', { class: 'pv__num', text: fmt(n, i) });
   const sk = res.sortKey;
   const same = (a, b) => (a == null ? b == null : b != null && a.every((x, i) => x === b[i]));
@@ -165,7 +166,14 @@ export function pivotTable(g, p, ui = {}) {
 
   const table = h('table', { class: 'pv__table' }, h('thead', null, ...head), h('tbody', null, ...body));
   const wrap = h('div', { class: 'pv__scroll' }, table);
-  if (res.topHidden) wrap.append(h('p', { class: 'pv__note', text: tt('只显示了前 {top} 项，另有 {hidden} 项未显示（高级设置 →「只显示前 N 项」）。', { top: o.top, hidden: res.topHidden }) }));
+  if (res.topHidden) {
+    const ti = res.topInfo;
+    const text = ti?.by
+      ? tt(ti.dir === 'min' ? '只显示了「{field}」中「{by}」最小的 {top} 项，另有 {hidden} 项未显示（高级设置 →「只显示前 N 项」）。' : '只显示了「{field}」中「{by}」最大的 {top} 项，另有 {hidden} 项未显示（高级设置 →「只显示前 N 项」）。',
+        { field: ti.field, by: ti.by, top: o.top, hidden: res.topHidden })
+      : tt('只显示了前 {top} 项，另有 {hidden} 项未显示（高级设置 →「只显示前 N 项」）。', { top: o.top, hidden: res.topHidden });
+    wrap.append(h('p', { class: 'pv__note', text }));
+  }
   if (res.truncated) wrap.append(h('p', { class: 'pv__note', text: tt('分组太多，只显示了前面一部分。可以换一个取值更少的字段来分组，或用筛选缩小范围。') }));
   return wrap;
 }
@@ -240,7 +248,8 @@ export class PivotView {
     this._save({ ...p, opts });
   }
 
-  _name(p, c) { return fieldName(p, c, (r, cc) => this.g.calc.text(r, cc), (cc) => this.g.model.colTitle(cc)); }
+  /** 字段显示名（含自定义名称）；raw = 原始名称（字段清单里用）。 */
+  _name(p, c, raw = false) { return fieldName(p, c, (r, cc) => this.g.calc.text(r, cc), (cc) => this.g.model.colTitle(cc), raw); }
 
   _render() {
     const p = this._def();
@@ -263,7 +272,7 @@ export class PivotView {
     if (!show) return;
     const [, c0, , c1] = p.range;
     const names = [];
-    for (let c = c0; c <= c1; c++) names.push(this._name(p, c));
+    for (let c = c0; c <= c1; c++) names.push(this._name(p, c, true));
     const sig = JSON.stringify([p, names]);
     if (sig !== this._panelSig) { this._panelSig = sig; this._renderPanel(p, names); }
   }
@@ -369,7 +378,7 @@ export class PivotView {
   _renderPanel(p, names) {
     const n = normPivot(p);
     const [, c0] = p.range;
-    const nameOf = (c) => names[c - c0] ?? colName(c);
+    const nameOf = (c) => this._name(p, c);
     const value = (r, c) => this.g.calc.value(r, c);
 
     // 字段清单：勾选 = 自动放到合适的区域；取消勾选 = 从所有区域移除
@@ -444,8 +453,6 @@ export class PivotView {
       const input = h('input', { type: 'checkbox', checked: !!o[k], onchange: () => setOpt(k, input.checked) });
       return h('label', { class: 'pvf__opt', title: tip ?? '' }, input, h('span', { text: label }));
     };
-    const decSel = select([['', tt('自动')], ...[0, 1, 2, 3, 4].map((d) => [String(d), tt('{n} 位', { n: d })])], o.dec == null ? '' : String(o.dec),
-      { class: 'ui-input ui-input--sm', onchange: (e) => setOpt('dec', e.target.value === '' ? null : Number(e.target.value)) });
     const sortSel = select(PIVOT_SORTS.map(([k, l]) => [k, l]), o.sort, { class: 'ui-input ui-input--sm', onchange: (e) => setOpt('sort', e.target.value) });
     const byVal = o.sort === 'valDesc' || o.sort === 'valAsc';
     // 按值排序时选按哪个值字段（按某一列排：直接点表格里那一列的标题）
@@ -456,6 +463,21 @@ export class PivotView {
     const layoutSel = select(PIVOT_LAYOUTS.map(([k, l]) => [k, l]), o.layout, { class: 'ui-input ui-input--sm', onchange: (e) => setOpt('layout', e.target.value) });
     const topIn = h('input', { class: 'ui-input ui-input--sm', type: 'number', min: '0', max: '1000', step: '1', value: o.top ? String(o.top) : '', placeholder: tt('全部') });
     topIn.addEventListener('change', () => { const n = Math.floor(Number(topIn.value)); setOpt('top', Number.isFinite(n) && n > 0 ? n : 0); });
+    // 前 N 项：作用在最外层行字段还是最外层列字段、按哪个值、取最大还是最小
+    const topOn = n.cols.length && (o.topOn === 'cols' || !n.rows.length) ? 'cols' : 'rows';
+    const onOpts = [...(n.rows.length ? [['rows', tt('行：{name}', { name: this._name(p, n.rows[0]) })]] : []),
+      ...(n.cols.length ? [['cols', tt('列：{name}', { name: this._name(p, n.cols[0]) })]] : [])];
+    const topOnSel = onOpts.length > 1 ? select(onOpts, topOn, { class: 'ui-input ui-input--sm', onchange: (e) => setOpt('topOn', e.target.value) }) : null;
+    const topValSel = n.values.length > 1 ? select(n.values.map((v, i) => [String(i), valueLabel(v, this._name(p, v.col))]), String(o.topVal),
+      { class: 'ui-input ui-input--sm', onchange: (e) => setOpt('topVal', Number(e.target.value)) }) : null;
+    const topDirSel = n.values.length ? select([['max', tt('最大的 N 项')], ['min', tt('最小的 N 项')]], o.topDir,
+      { class: 'ui-input ui-input--sm', onchange: (e) => setOpt('topDir', e.target.value) }) : null;
+    const topField = onOpts.find(([k]) => k === topOn);
+    const topBy = n.values.length ? valueLabel(n.values[o.topVal] ?? n.values[0], this._name(p, (n.values[o.topVal] ?? n.values[0]).col)) : '';
+    const topTip = !topField ? tt('先把字段放进「行」或「列」区域。')
+      : !topBy ? tt('没有值字段，按当前排序保留「{field}」的前 N 个。', { field: this._name(p, topOn === 'cols' ? n.cols[0] : n.rows[0]) })
+      : tt(o.topDir === 'min' ? '按「{by}」的总计，只保留「{field}」中最小的 N 项；内层字段和另一方向不受影响，总计只算保留的项。' : '按「{by}」的总计，只保留「{field}」中最大的 N 项；内层字段和另一方向不受影响，总计只算保留的项。',
+        { by: topBy, field: this._name(p, topOn === 'cols' ? n.cols[0] : n.rows[0]) });
     const adv = h('details', { class: 'pvf__adv', open: this._adv },
       h('summary', { text: tt('高级设置') }),
       check(tt('显示每行的总计（最右列）'), 'rowTotals', tt('有列字段时，在最右侧加一列总计')),
@@ -468,15 +490,18 @@ export class PivotView {
       o.layout !== 'compact' && check(tt('重复所有项目标签'), 'repeat', tt('外层标签在每一行都显示，不留空（方便复制、筛选、再做表）')),
       o.layout === 'tabular' && check(tt('合并且居中排列带标签的单元格'), 'merge', tt('相同的外层标签合并成一格')),
       check(tt('在每个项目后插入空行'), 'blank', tt('每个最外层项目结束后空一行，看起来更清楚')),
-      h('label', { class: 'pvf__opt pvf__opt--row', title: tt('按当前的行排序，只保留最外层行字段的前 N 项（例如「按值降序」+ 10 = 前 10 名）；总计也只算显示的项') },
-        h('span', { text: tt('只显示前 N 项') }), topIn),
-      h('div', { class: 'pvf__group', text: tt('排序与格式') }),
+      h('div', { class: 'pvf__group', text: tt('只显示前 N 项') }),
+      h('label', { class: 'pvf__opt pvf__opt--row' }, h('span', { text: tt('项数 N') }), topIn),
+      o.top > 0 && topOnSel && h('label', { class: 'pvf__opt pvf__opt--row' }, h('span', { text: tt('作用于') }), topOnSel),
+      o.top > 0 && topValSel && h('label', { class: 'pvf__opt pvf__opt--row' }, h('span', { text: tt('依据') }), topValSel),
+      o.top > 0 && topDirSel && h('label', { class: 'pvf__opt pvf__opt--row' }, h('span', { text: tt('保留') }), topDirSel),
+      h('p', { class: 'pvf__tip', text: topTip }),
+      h('div', { class: 'pvf__group', text: tt('排序与显示') }),
       h('label', { class: 'pvf__opt pvf__opt--row' }, h('span', { text: tt('行排序') }), sortSel),
       valSel && h('label', { class: 'pvf__opt pvf__opt--row' }, h('span', { text: tt('排序依据') }), valSel),
       h('p', { class: 'pvf__tip', text: tt('也可以直接点表格里的值列标题排序（降序 → 升序 → 恢复），点行字段名切换升降序。') }),
-      h('label', { class: 'pvf__opt pvf__opt--row' }, h('span', { text: tt('小数位数') }), decSel),
       h('label', { class: 'pvf__opt pvf__opt--row' }, h('span', { text: tt('空值显示为') }), emptyIn),
-      h('p', { class: 'pvf__tip', text: tt('值字段的汇总方式和「列汇总的百分比 / 行汇总的百分比 / 总计的百分比」：点「值」区域里的字段设置。') }));
+      h('p', { class: 'pvf__tip', text: tt('值字段的汇总方式、值显示方式、值显示格式（数字格式和小数位）和重命名：点「值」区域里的字段设置。') }));
     adv.addEventListener('toggle', () => { this._adv = adv.open; });
 
     this._msg = h('div', { class: 'pvf__msg', attrs: { role: 'status' } });
@@ -520,12 +545,20 @@ export class PivotView {
       items.push(
         { label: tt('值汇总方式'), submenu: PIVOT_AGGS.map(([k, l]) => ({ label: l, checked: v.agg === k, action: () => setV({ agg: k }) })) },
         { label: tt('值显示方式'), submenu: PIVOT_SHOW.map(([k, l]) => ({ label: l, checked: v.show === k, action: () => setV({ show: k }) })) },
+        { label: tt('值显示格式'), submenu: [
+          ...PIVOT_FMTS.map(([k, l]) => ({ label: l, checked: (v.fmt ?? 'auto') === k, action: () => setV({ fmt: k === 'auto' ? undefined : k }) })),
+          { sep: true },
+          { label: tt('小数位数'), submenu: [['', tt('自动')], ...[0, 1, 2, 3, 4].map((d) => [d, tt('{n} 位', { n: d })])].map(([d, l]) => ({
+            label: /** @type {string} */ (l), checked: (v.dec ?? n.opts.dec ?? '') === d, action: () => setV({ dec: d === '' ? undefined : d }),
+          })) },
+        ] },
+        { label: tt('重命名…'), action: () => this._rename(area, index, col) },
         { sep: true });
     } else {
       items.push({ label: tt('筛选取值…'), action: () => {
         const chip = this.panel.querySelector(`.pvf__chips[data-area="${area}"] .pvf__chip[data-index="${index}"]`);
         this._picker(cur, col, chip ?? this.panel);
-      } }, { sep: true });
+      } }, { label: tt('重命名…'), action: () => this._rename(area, index, col) }, { sep: true });
     }
     items.push(
       { label: tt('上移'), disabled: index === 0, action: () => move({ area, index: index - 1 }) },
@@ -535,6 +568,36 @@ export class PivotView {
       { sep: true },
       { label: tt('删除字段'), danger: true, action: () => move({ area: 'remove' }) });
     openMenu(items, at);
+  }
+
+  /** 重命名区域里的字段：值字段存 name，行 / 列 / 筛选字段存 labels[列号]；清空 = 恢复默认名称。 */
+  async _rename(area, index, col) {
+    const cur = this._def();
+    if (!cur) return;
+    const n = normPivot(cur);
+    const v = area === 'values' ? n.values[index] : null;
+    const now = v ? valueLabel(v, this._name(cur, col)) : this._name(cur, col);
+    const raw = await promptDialog(tt('重命名字段'), tt('名称（留空恢复默认）'), now);
+    if (raw == null) return;
+    const name = raw.replace(/\s+/g, ' ').trim().slice(0, 30);
+    const c2 = this._def();
+    if (!c2) return;
+    if (v) {
+      const vals = normPivot(c2).values.map((x, i) => {
+        if (i !== index) return x;
+        const y = { ...x };
+        // 和默认名称一样就不存
+        if (name && name !== valueLabel({ ...x, name: undefined }, this._name(c2, col))) y.name = name; else delete y.name;
+        return y;
+      });
+      this._save({ ...c2, values: vals });
+    } else {
+      const labels = { ...(normPivot(c2).labels ?? {}) };
+      if (name && name !== this._name(c2, col, true)) labels[col] = name; else delete labels[col];
+      const next = { ...c2, labels };
+      if (!Object.keys(labels).length) delete next.labels;
+      this._save(next);
+    }
   }
 
   // ── 拖放 ──────────────────────────────────────────────────────────────
@@ -603,8 +666,9 @@ export class PivotView {
   }
 }
 
-/** 值字段在区域里的标题：「求和项:销量」，有显示方式时加个 %。 */
+/** 值字段在区域里的标题：「求和项:销量」，有显示方式时加个 %；有自定义名称就用它。 */
 function valueTitle(v, name) {
+  if (v.name) return v.name;
   const agg = PIVOT_AGGS.find(([k]) => k === v.agg)?.[1] ?? tt('求和');
   return tt('{agg}项:{name}', { agg, name }) + (v.show && v.show !== 'none' ? ' %' : '');
 }
@@ -620,6 +684,11 @@ export function removeField(def, col) {
     values: n.values.filter((v) => v.col !== col),
   };
   delete next.col;
+  if (n.labels[col]) {
+    const labels = { ...n.labels };
+    delete labels[col];
+    if (Object.keys(labels).length) next.labels = labels; else delete next.labels;
+  }
   if (n.hide[col]) {
     const hide = { ...n.hide };
     delete hide[col];

@@ -161,6 +161,11 @@ export function adjustProps(props, axis, at, n) {
             for (const [k, v] of Object.entries(p.hide)) { const c = mv(Number(k)); if (c >= 0) hide[c] = v; }
             next.hide = hide;
           }
+          if (p.labels && typeof p.labels === 'object') {
+            /** @type {Record<string, any>} */ const labels = {};
+            for (const [k, v] of Object.entries(p.labels)) { const c = mv(Number(k)); if (c >= 0) labels[c] = v; }
+            next.labels = labels;
+          }
           res.push(next);
         }
         out[key] = res;
