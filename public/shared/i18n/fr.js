@@ -2270,5 +2270,19 @@ export default {
  "此人不在这张表的分享名单里": "Cette personne ne figure pas dans la liste de partage de cette feuille",
  "文件已损坏，或者不是这种格式": "Le fichier est endommagé ou n'est pas dans ce format",
  "不支持的压缩方式": "Méthode de compression non prise en charge",
- "打开 / 关闭目录": "Afficher / masquer la navigation"
+ "打开 / 关闭目录": "Afficher / masquer la navigation",
+ "A4 纵向": "A4 portrait",
+ "A4 横向": "A4 paysage",
+ "宽版": "Large",
+ "高": "Hauteur",
+ "宽和高要在 {min} 到 {max} 之间": "La largeur et la hauteur doivent être comprises entre {min} et {max}",
+ "应用": "Appliquer",
+ "页面大小": "Taille de la page",
+ "自定义（像素）": "Personnalisé (pixels)",
+ "📐 页面大小": "📐 Taille de la page",
+ "设置文档页面的宽度和高度": "Définir la largeur et la hauteur de la page du document",
+ "高度留空表示自动（随内容变长）。设了高度，打印 / 导出 PDF、Word 时按这个纸张大小。": "Laissez la hauteur vide pour qu'elle soit automatique (elle s'adapte au contenu). Si une hauteur est définie, l'impression et l'export PDF / Word utilisent ce format de papier.",
+ "设置幻灯片的宽度和高度（整份）": "Définir la largeur et la hauteur des diapositives (toute la présentation)",
+ "改大小时，页面上的内容按比例缩放并居中，主题装饰拉伸铺满。": "Quand la taille change, le contenu est redimensionné proportionnellement et centré, et les décorations du thème s'étirent pour remplir la page.",
+ "页面大小已改为 {w} × {h}": "Taille de la page changée en {w} × {h}"
 };

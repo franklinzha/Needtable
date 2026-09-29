@@ -26,7 +26,7 @@ import { ChartLayer } from './chart.js';
 import { openCellMenu, openHeaderMenu } from './menus.js';
 import { cellRef, rangeName, parseRange, parseRef } from '../../shared/util/a1.js';
 import { isStructural } from '../../shared/model/ops.js';
-import { h } from '../ui/dom.js';
+import { h, isMobile } from '../ui/dom.js';
 import { t as tt } from '../../shared/i18n/i18n.js';
 
 const RESIZE_GRAB = 4;         // 列宽 / 行高拖拽的命中半径（px）
@@ -1284,12 +1284,6 @@ function closeParens(f) {
 function inBox(b, x, y) { return !!b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h; }
 function round(n) { return Math.round(n * 1e6) / 1e6; }
 function norm(t) { return String(t).replace(/\r/g, '').replace(/\n+$/, ''); }
-
-function isMobile() {
-  try {
-    return !!globalThis.matchMedia?.('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 768;
-  } catch { return false; }
-}
 
 function shortName(email) {
   const s = String(email ?? '');

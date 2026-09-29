@@ -1,8 +1,9 @@
 /**
  * 幻灯片（kind = 'slides'）：类似 PPT。
  *
- * 存储：props.slides = { ratio:'16:9', theme?, slides:[{ id, bg, notes?, els:[元素…] }] }
- *   元素 { id, t, x, y, w, h, … }，坐标是 960×540 的逻辑像素，画面用 transform 缩放。
+ * 存储：props.slides = { ratio:'16:9', theme?, size?: { w, h }, slides:[{ id, bg, notes?, els:[元素…] }] }
+ *   size 是页面大小（逻辑像素），不写就是 960×540（16:9）。
+ *   元素 { id, t, x, y, w, h, … }，坐标是页面大小的逻辑像素，画面用 transform 缩放。
  *     text   runs, size, color, align, b, fill?, role?（title / sub / body，换主题时按它重新上色）
  *     shape  shape（themes.js 的 SHAPES）, fill（颜色或 'none'）, stroke?, sw?；deco = 主题装饰，不能选中
  *     img    img（附件编号）
@@ -12,14 +13,14 @@
  * 正在打字或拖动时先不重画，结束后再补上。
  */
 
-import { h } from '../ui/dom.js';
+import { h, isMobile } from '../ui/dom.js';
 import { openMenu } from '../ui/menu.js';
 import { uid } from '../../shared/util/uid.js';
 import { t as tt } from '../../shared/i18n/i18n.js';
 import { mergeSlides } from '../../shared/model/docmerge.js';
 import { EmbedHost, pickEmbed } from './embed.js';
 import { renderRuns, readRuns, runsText, exec, placeCaret, isHex } from './runs.js';
-import { shell, tbtn, colorBtn, popover, card } from './docview.js';
+import { shell, tbtn, colorBtn, popover, card, sizePop } from './docview.js';
 import {
   SHAPES, SHAPE_BY_ID, SLIDE_THEMES, FONTS, LAYOUTS, DECK_TEMPLATES, strokeWidth,
   layout, slideTheme, isSlideTheme, themeDeco, applyTheme, deckFromTemplate,
@@ -27,7 +28,47 @@ import {
 
 export { layout };
 
+/** 默认页面大小（16:9）。版式、主题装饰都是按这个大小画的，别的大小时按比例缩放。 */
 export const W = 960, H = 540;
+/** 页面大小的范围（逻辑像素）。 */
+export const SIZE_MIN = 240, SIZE_MAX = 1920;
+/** 常用页面大小。 */
+export const SLIDE_SIZES = /** @type {const} */ ([
+  ['16:9', 960, 540],
+  ['4:3', 960, 720],
+  ['16:10', 960, 600],
+  [tt('A4 横向'), 960, 679],
+  [tt('A4 纵向'), 679, 960],
+  ['1:1', 720, 720],
+  ['9:16', 540, 960],
+]);
+
+/** 整份的页面大小。 @param {any} d @returns {{ w: number, h: number }} */
+export function deckSize(d) {
+  const n = (/** @type {any} */ v, /** @type {number} */ dft) => {
+    const x = Math.round(Number(v));
+    return Number.isFinite(x) && x > 0 ? clamp(x, SIZE_MIN, SIZE_MAX) : dft;
+  };
+  return { w: n(d?.size?.w, W), h: n(d?.size?.h, H) };
+}
+
+/**
+ * 把元素从一个页面大小搬到另一个：主题装饰拉伸铺满，其余等比缩放后居中（字号跟着缩放）。
+ * 返回新数组，不改原来的元素。
+ * @param {any[]} els @param {{ w: number, h: number }} from @param {{ w: number, h: number }} to @param {boolean} [onlyDeco] 只动装饰
+ */
+export function scaleEls(els, from, to, onlyDeco = false) {
+  if (from.w === to.w && from.h === to.h) return els;
+  const sx = to.w / from.w, sy = to.h / from.h, k = Math.min(sx, sy);
+  const ox = (to.w - from.w * k) / 2, oy = (to.h - from.h * k) / 2;
+  return els.map((e) => {
+    if (e.deco) return { ...e, x: Math.round(e.x * sx), y: Math.round(e.y * sy), w: Math.max(1, Math.round(e.w * sx)), h: Math.max(1, Math.round(e.h * sy)) };
+    if (onlyDeco) return e;
+    const o = { ...e, x: Math.round(ox + e.x * k), y: Math.round(oy + e.y * k), w: Math.max(10, Math.round(e.w * k)), h: Math.max(10, Math.round(e.h * k)) };
+    if (e.t === 'text' && e.size) o.size = clamp(Math.round(e.size * k), 8, 200);
+    return o;
+  });
+}
 const SAVE_MS = 600;
 const MAX_BYTES = 256 * 1024;
 const MAX_SLIDES = 300;
@@ -43,14 +84,15 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 /** 数据清洗：坐标取整、夹在画布附近，不认识的元素丢掉。 @param {any} d */
 export function normDeck(d) {
+  const { w: DW, h: DH } = deckSize(d);
   const slides = [];
   for (const s of Array.isArray(d?.slides) ? d.slides.slice(0, MAX_SLIDES) : []) {
     if (!s || typeof s.id !== 'string') continue;
     const els = [];
     for (const e of Array.isArray(s.els) ? s.els.slice(0, MAX_ELS) : []) {
       if (!e || typeof e.id !== 'string' || !['text', 'shape', 'img', 'embed'].includes(e.t)) continue;
-      const w = clamp(Math.round(Number(e.w) || 100), 10, W * 2), hh = clamp(Math.round(Number(e.h) || 60), 10, H * 2);
-      const o = { ...e, x: clamp(Math.round(Number(e.x) || 0), -w + 10, W - 10), y: clamp(Math.round(Number(e.y) || 0), -hh + 10, H - 10), w, h: hh };
+      const w = clamp(Math.round(Number(e.w) || 100), 10, DW * 2), hh = clamp(Math.round(Number(e.h) || 60), 10, DH * 2);
+      const o = { ...e, x: clamp(Math.round(Number(e.x) || 0), -w + 10, DW - 10), y: clamp(Math.round(Number(e.y) || 0), -hh + 10, DH - 10), w, h: hh };
       if (e.t === 'shape') {
         if (!SHAPE_BY_ID.has(o.shape)) o.shape = 'rect';
         if (o.fill !== 'none' && !isHex(o.fill)) delete o.fill;
@@ -61,7 +103,10 @@ export function normDeck(d) {
     }
     slides.push({ ...s, bg: isHex(s.bg) ? s.bg : '#ffffff', els });
   }
-  return isSlideTheme(d?.theme) ? { ratio: '16:9', theme: d.theme, slides } : { ratio: '16:9', slides };
+  /** @type {any} */ const out = { ratio: '16:9', slides };
+  if (isSlideTheme(d?.theme)) out.theme = d.theme;
+  if (DW !== W || DH !== H) out.size = { w: DW, h: DH };
+  return out;
 }
 
 export class SlidesView {
@@ -81,6 +126,7 @@ export class SlidesView {
     this.readonly = true;
     this.loaded = false;
     this.dirty = false;
+    /** 手机上只读（和表格一样），仍然可以翻页和放映 */ this.mobile = isMobile();
     this._timer = 0;
     this.base = normDeck(null);
     this.data = normDeck(null);
@@ -131,6 +177,7 @@ export class SlidesView {
     this.base = structuredClone(this.data);
     this._setEditable();
     this._render();
+    if (this.mobile) this.setReadonlyReason(tt('移动端为只读模式，请在电脑上编辑'));
   }
 
   // ── 外部接口（与 Grid 同名） ───────────────────────────────────────────────
@@ -150,7 +197,7 @@ export class SlidesView {
     this.statConn.textContent = /** @type {any} */ (STATE_LABEL)[s] ?? s;
     this.statConn.title = detail ?? '';
     if (s === 'online' || s === 'readonly') this.loaded = true;
-    if (this.sync?.readonly && !this.opts.publicMode) this.setReadonlyReason(tt('只读权限：你可以查看和放映，但不能修改'));
+    if (this.sync?.readonly && !this.opts.publicMode && !this.mobile) this.setReadonlyReason(tt('只读权限：你可以查看和放映，但不能修改'));
     this._setEditable();
   }
 
@@ -188,14 +235,15 @@ export class SlidesView {
     });
     const shapeBtn = tbtn(tt('◆ 形状'), tt('插入形状（30 多种）'), () => this._shapePop(shapeBtn));
     const themeBtn = tbtn(tt('🎨 主题'), tt('主题与模板：一键换整份的配色、字体和装饰'), () => this._themePop(themeBtn));
+    const sizeBtn = tbtn(tt('📐 页面大小'), tt('设置幻灯片的宽度和高度（整份）'), () => this._sizePop(sizeBtn));
     this.editTools = h('div', { class: 'dc-group' },
       newBtn,
-      tbtn(tt('𝐓 文本框'), tt('插入文本框'), () => this._addEl({ t: 'text', runs: [], size: 28, color: this._theme().text, align: 'left', x: 280, y: 220, w: 400, h: 90, ph: tt('输入文字'), role: 'body' }, true)),
+      tbtn(tt('𝐓 文本框'), tt('插入文本框'), () => this._addEl({ t: 'text', runs: [], size: 28, color: this._theme().text, align: 'left', x: Math.round((this.W - 400) / 2), y: Math.round((this.H - 90) / 2), w: 400, h: 90, ph: tt('输入文字'), role: 'body' }, true)),
       shapeBtn,
       tbtn(tt('🖼 图片'), tt('插入图片（也可以直接粘贴）'), () => this._pickImage()),
       tbtn(tt('📊 表格内容'), tt('插入本内容里某张表的区域、图表或透视表（活数据）'), () => void this._pickEmbed()),
       colorBtn(tt('背景'), tt('本页背景色'), '#ffffff', (c) => { const sl = this._slide(); if (sl && !this.readonly) { sl.bg = c; this._changed(); } }),
-      themeBtn);
+      themeBtn, sizeBtn);
     this.selTools = h('div', { class: 'dc-group' });
     const exportBtn = tbtn(tt('📤 导出'), tt('导出为 PowerPoint（.pptx）或 PDF'), () => {
       const r = exportBtn.getBoundingClientRect();
@@ -308,8 +356,9 @@ export class SlidesView {
   _renderRail() {
     const kids = this.data.slides.map((/** @type {any} */ sl, /** @type {number} */ i) => {
       const box = h('div', { class: 'sl-thumb__box' });
+      if (this.data.size) box.style.setProperty('aspect-ratio', this.W + ' / ' + this.H);
       const mini = this._slideEl(sl, 'thumb');
-      mini.style.setProperty('transform', 'scale(' + (THUMB_W / W) + ')');
+      mini.style.setProperty('transform', 'scale(' + (THUMB_W / this.W) + ')');
       box.append(mini);
       const t = h('button', {
         class: 'sl-thumb' + (i === this.cur ? ' sl-thumb--on' : ''), type: 'button',
@@ -372,9 +421,9 @@ export class SlidesView {
     const el = this.stageSlide;
     if (!el) return;
     const ww = this.wrap.clientWidth, wh = this.wrap.clientHeight;
-    const s = Math.max(0.1, Math.min((ww - 48) / W, (wh - 48) / H));
+    const s = Math.max(0.1, Math.min((ww - 48) / this.W, (wh - 48) / this.H));
     this.scale = s;
-    el.style.setProperty('transform', 'translate(' + Math.round((ww - W * s) / 2) + 'px,' + Math.round((wh - H * s) / 2) + 'px) scale(' + s + ')');
+    el.style.setProperty('transform', 'translate(' + Math.round((ww - this.W * s) / 2) + 'px,' + Math.round((wh - this.H * s) / 2) + 'px) scale(' + s + ')');
   }
 
   /**
@@ -383,6 +432,7 @@ export class SlidesView {
    */
   _slideEl(sl, mode) {
     const el = h('div', { class: 'sl-slide' + (mode === 'edit' ? ' sl-edit' : '') });
+    if (this.data.size) { el.style.setProperty('width', this.W + 'px'); el.style.setProperty('height', this.H + 'px'); }
     el.style.setProperty('background', isHex(sl.bg) ? sl.bg : '#ffffff');
     const font = FONTS[slideTheme(this.data.theme).font ?? 'sans'];
     if (font) el.style.setProperty('font-family', font);
@@ -486,8 +536,8 @@ export class SlidesView {
       moved = true;
       const snap = (/** @type {number} */ v) => (m.altKey ? Math.round(v) : Math.round(v / 4) * 4);
       if (dir === 'move') {
-        e.x = clamp(snap(o.x + dx), -o.w + 10, W - 10);
-        e.y = clamp(snap(o.y + dy), -o.h + 10, H - 10);
+        e.x = clamp(snap(o.x + dx), -o.w + 10, this.W - 10);
+        e.y = clamp(snap(o.y + dy), -o.h + 10, this.H - 10);
       } else {
         let { x, y, w, h: hh } = o;
         if (dir.includes('e')) w = o.w + dx;
@@ -596,6 +646,13 @@ export class SlidesView {
   /** 当前主题（没选过就是简洁白）。 */
   _theme() { return slideTheme(this.data.theme); }
 
+  /** 页面宽 / 高（逻辑像素）。 */
+  get W() { return deckSize(this.data).w; }
+  get H() { return deckSize(this.data).h; }
+
+  /** 按默认大小（960×540）画的版式、装饰搬到当前页面大小。 @param {any[]} els @param {boolean} [onlyDeco] */
+  _fitNew(els, onlyDeco = false) { return scaleEls(els, { w: W, h: H }, deckSize(this.data), onlyDeco); }
+
   /** @param {string} kind 见 themes.js 的 LAYOUTS */
   _addSlide(kind) {
     if (this.readonly) return;
@@ -605,7 +662,7 @@ export class SlidesView {
     const bg = th ? th.bg : this._slide()?.bg ?? '#ffffff';
     const at = this.data.slides.length ? this.cur + 1 : 0;
     const els = layout(/** @type {any} */ (this.data.slides.length ? kind : 'title'), th);
-    this.data.slides.splice(at, 0, { id: uid('s'), bg, els: th ? [...themeDeco(th), ...els] : els });
+    this.data.slides.splice(at, 0, { id: uid('s'), bg, els: this._fitNew(th ? [...themeDeco(th), ...els] : els) });
     this.cur = at;
     this.sel = null;
     this._changed();
@@ -689,7 +746,7 @@ export class SlidesView {
     }
     const fill = this.data.theme ? this._theme().accent : '#a5d8ff';
     const [w, hh] = sh.sq ? [180, 180] : [220, 140];
-    this._addEl({ t: 'shape', shape: id, fill, x: Math.round((W - w) / 2), y: Math.round((H - hh) / 2), w, h: hh });
+    this._addEl({ t: 'shape', shape: id, fill, x: Math.round((this.W - w) / 2), y: Math.round((this.H - hh) / 2), w, h: hh });
   }
 
   /** 主题卡片。 @param {(id: string) => void} onPick @param {string} cur */
@@ -724,11 +781,35 @@ export class SlidesView {
       this._tplGrid((t) => { close?.(); this._useTemplate(t); }, true)), 'sl-pop');
   }
 
+  /** @param {HTMLElement} anchor */
+  _sizePop(anchor) {
+    if (this.readonly) return;
+    sizePop(anchor, {
+      presets: SLIDE_SIZES, cur: deckSize(this.data), min: SIZE_MIN, max: SIZE_MAX,
+      note: tt('改大小时，页面上的内容按比例缩放并居中，主题装饰拉伸铺满。'),
+      onPick: (w, hh) => this._setSize(w, hh),
+    });
+  }
+
+  /** 整份改页面大小，已有的元素跟着缩放。 @param {number} w @param {number} hh */
+  _setSize(w, hh) {
+    if (this.readonly) return;
+    this._stopEdit();
+    const from = deckSize(this.data), to = deckSize({ size: { w, h: hh } });
+    if (from.w === to.w && from.h === to.h) return;
+    for (const sl of this.data.slides) sl.els = scaleEls(sl.els, from, to);
+    if (to.w === W && to.h === H) delete this.data.size; else this.data.size = to;
+    this.sel = null;
+    this._changed();
+    this.opts.onStatus?.(tt('页面大小已改为 {w} × {h}', { w: to.w, h: to.h }));
+  }
+
   /** @param {string} id */
   _applyTheme(id) {
     if (this.readonly) return;
     this._stopEdit();
     applyTheme(this.data, id);
+    for (const sl of this.data.slides) sl.els = this._fitNew(sl.els, true);
     this.sel = null;
     this._changed();
     this.opts.onStatus?.(tt('已应用主题「{name}」', { name: slideTheme(id).name }));
@@ -739,8 +820,9 @@ export class SlidesView {
     if (this.readonly) return;
     this._stopEdit();
     const deck = deckFromTemplate(tpl, themeId ?? this.data.theme ?? 'plain');
+    for (const sl of deck.slides) sl.els = this._fitNew(sl.els);
     if (!this.data.slides.length) {
-      this.data = deck;
+      this.data = this.data.size ? { ...deck, size: this.data.size } : deck;
       this.cur = 0;
     } else {
       const room = MAX_SLIDES - this.data.slides.length;
@@ -812,15 +894,20 @@ export class SlidesView {
     const file = await X.pickFile('.pptx,.pptm,.ppsx,.potx,.key,.ppt');
     if (!file) return;
     try {
-      const { slides, notes } = await X.importSlidesFile(file, this.tableId, (m) => this.opts.onStatus?.(m));
+      const { slides, notes, size } = await X.importSlidesFile(file, this.tableId, (m) => this.opts.onStatus?.(m));
       if (this.readonly) return;
       this._stopEdit();
+      // 还没有幻灯片：用导入文件的页面大小；已经有了：导入的页按比例缩放到现在的大小
+      if (!this.data.slides.length) {
+        if (size.w === W && size.h === H) delete this.data.size; else this.data.size = deckSize({ size });
+      }
+      for (const sl of slides) sl.els = scaleEls(sl.els ?? [], size, deckSize(this.data));
       if (slides.some((/** @type {any} */ sl) => sl.els.length > MAX_ELS)) notes.push(tt('有的页元素超过 {n} 个，多出来的没有导入', { n: MAX_ELS }));
       const keep = normDeck(this.data).slides;
       const room = MAX_SLIDES - keep.length;
       if (room <= 0) { this.opts.onStatus?.(tt('最多 {n} 页', { n: MAX_SLIDES }), 'error'); return; }
       if (slides.length > room) notes.push(tt('最多 {max} 页，只导入了前 {n} 页', { max: MAX_SLIDES, n: room }));
-      const add = X.fitSize(normDeck({ slides: slides.slice(0, room) }).slides, (l) => ({ ...this.data, slides: [...keep, ...l] }), notes, tt('页'));
+      const add = X.fitSize(normDeck({ size: this.data.size, slides: slides.slice(0, room) }).slides, (l) => ({ ...this.data, slides: [...keep, ...l] }), notes, tt('页'));
       if (!add.length) { this.opts.onStatus?.(notes.length ? tt('没有可以导入的幻灯片：{notes}', { notes: notes.join(tt('；')) }) : tt('没有可以导入的幻灯片'), 'error'); return; }
       this.cur = keep.length;
       this.data = { ...this.data, slides: [...keep, ...add] };
@@ -886,9 +973,9 @@ export class SlidesView {
       // 按图片本身的比例放，最大占画面的 60%
       const dim = await imageSize(f);
       const r = dim ? dim.w / dim.h : 4 / 3;
-      let w = 480, hh = w / r;
-      if (hh > 360) { hh = 360; w = hh * r; }
-      this._addEl({ t: 'img', img: res.id, x: Math.round((W - w) / 2), y: Math.round((H - hh) / 2), w: Math.round(w), h: Math.round(hh) });
+      let w = this.W * 0.5, hh = w / r;
+      if (hh > this.H * 2 / 3) { hh = this.H * 2 / 3; w = hh * r; }
+      this._addEl({ t: 'img', img: res.id, x: Math.round((this.W - w) / 2), y: Math.round((this.H - hh) / 2), w: Math.round(w), h: Math.round(hh) });
     } catch (e) {
       this.opts.onStatus?.(/** @type {Error} */ (e).message || tt('上传失败'), 'error');
     }
@@ -946,8 +1033,8 @@ export class SlidesView {
     const mv = /** @type {any} */ (arrows)[e.key];
     if (mv) {
       e.preventDefault();
-      el.x = clamp(el.x + mv[0], -el.w + 10, W - 10);
-      el.y = clamp(el.y + mv[1], -el.h + 10, H - 10);
+      el.x = clamp(el.x + mv[0], -el.w + 10, this.W - 10);
+      el.y = clamp(el.y + mv[1], -el.h + 10, this.H - 10);
       this._changed();
     }
   }
@@ -1039,8 +1126,8 @@ export class SlidesView {
       const sl = this.data.slides[i];
       if (!sl) { close(); return; }
       const el = this._slideEl(sl, 'show');
-      const s = Math.min(window.innerWidth / W, window.innerHeight / H);
-      el.style.setProperty('transform', 'translate(' + Math.round((window.innerWidth - W * s) / 2) + 'px,' + Math.round((window.innerHeight - H * s) / 2) + 'px) scale(' + s + ')');
+      const s = Math.min(window.innerWidth / this.W, window.innerHeight / this.H);
+      el.style.setProperty('transform', 'translate(' + Math.round((window.innerWidth - this.W * s) / 2) + 'px,' + Math.round((window.innerHeight - this.H * s) / 2) + 'px) scale(' + s + ')');
       num.textContent = (i + 1) + ' / ' + this.data.slides.length;
       box.replaceChildren(el, num);
       this.embeds.prune();
@@ -1079,13 +1166,14 @@ export class SlidesView {
 
   /** 打印：每页一张。 */
   _fillPrint() {
-    const scale = 0.72;
+    // 默认 16:9 是 0.72（约 691px 宽），竖版的页面按高度收一下，一页纸放得下
+    const scale = Math.min(691 / this.W, 950 / this.H);
     this.printBox.replaceChildren(...this.data.slides.map((/** @type {any} */ sl) => {
       const el = this._slideEl(sl, 'show');
       el.style.setProperty('transform', 'scale(' + scale + ')');
       const cell = h('div', { class: 'sl-print__page' }, el);
-      cell.style.setProperty('width', W * scale + 'px');
-      cell.style.setProperty('height', H * scale + 'px');
+      cell.style.setProperty('width', this.W * scale + 'px');
+      cell.style.setProperty('height', this.H * scale + 'px');
       cell.style.setProperty('overflow', 'hidden');
       cell.style.setProperty('margin', '0 auto 16px');
       cell.style.setProperty('break-after', 'page');

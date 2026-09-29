@@ -8,7 +8,7 @@ import { installDom } from './dom-stub.mjs';
 installDom();
 const { mergeById, mergeDoc, mergeSlides } = await import('../public/shared/model/docmerge.js');
 const { normRuns, cleanMarks, safeHref, toHex, runsText } = await import('../public/js/doc/runs.js');
-const { normDeck, layout, W, H } = await import('../public/js/doc/slides.js');
+const { normDeck, layout, W, H, deckSize, scaleEls } = await import('../public/js/doc/slides.js');
 const T = await import('../public/js/doc/themes.js');
 const { normalizeOp } = await import('../public/shared/model/ops.js');
 const { ARTICLES, GROUPS } = await import('../public/js/help-guide.js');
@@ -53,6 +53,28 @@ await test('mergeDoc：两人改不同段落不互相覆盖', () => {
   const theirs = { blocks: [base.blocks[0], { id: 'p2', t: 'p', runs: [['二改']] }] };
   const out = mergeDoc(base, mine, theirs);
   assert.deepEqual(out.blocks.map((b) => runsText(b.runs)), ['一改', '二改']);
+});
+
+await test('页面大小：normDeck 清洗 size，scaleEls 等比缩放、装饰拉伸，合并时各自保留', () => {
+  assert.equal(normDeck({ slides: [] }).size, undefined);
+  assert.equal(normDeck({ size: { w: 960, h: 540 }, slides: [] }).size, undefined);
+  assert.deepEqual(normDeck({ size: { w: 960, h: 720 }, slides: [] }).size, { w: 960, h: 720 });
+  assert.deepEqual(deckSize({ size: { w: 99999, h: 'x' } }), { w: 1920, h: 540 });
+  // 竖版页面上元素的位置按页面大小夹住，不按 960×540
+  const tall = normDeck({ size: { w: 540, h: 960 }, slides: [{ id: 's', els: [{ id: 'e', t: 'text', x: 0, y: 900, w: 100, h: 50 }] }] });
+  assert.equal(tall.slides[0].els[0].y, 900);
+  const out = scaleEls([
+    { id: 'd', t: 'shape', deco: 1, x: 0, y: 0, w: 960, h: 14 },
+    { id: 't', t: 'text', x: 80, y: 170, w: 800, h: 110, size: 48 },
+  ], { w: 960, h: 540 }, { w: 960, h: 720 });
+  assert.deepEqual([out[0].w, out[0].h], [960, 19]);
+  assert.deepEqual([out[1].x, out[1].y, out[1].w, out[1].h, out[1].size], [80, 260, 800, 110, 48]);
+  const half = scaleEls([{ id: 't', t: 'text', x: 0, y: 0, w: 960, h: 540, size: 40 }], { w: 960, h: 540 }, { w: 480, h: 480 });
+  assert.deepEqual([half[0].x, half[0].y, half[0].w, half[0].h, half[0].size], [0, 105, 480, 270, 20]);
+  const base = { slides: [] }, mine = { slides: [], size: { w: 960, h: 720 } }, theirs = { slides: [], theme: 'dark' };
+  const m = mergeSlides(base, mine, theirs);
+  assert.deepEqual([m.size, m.theme], [{ w: 960, h: 720 }, 'dark']);
+  assert.deepEqual(mergeDoc({ blocks: [] }, { blocks: [] }, { blocks: [], size: { w: 794, h: 1123 } }).size, { w: 794, h: 1123 });
 });
 
 await test('mergeSlides：同一页两边都改了，按元素再合并；背景各自保留', () => {

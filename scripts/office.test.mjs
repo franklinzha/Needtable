@@ -125,6 +125,18 @@ function iwa(data) {
   return new Uint8Array(out);
 }
 
+await test('页面大小：pptx 按 deck.size 导出、导入带回 size；docx 纸张大小', async () => {
+  const deck = { size: { w: 960, h: 720 }, slides: [{ id: 's', bg: '#ffffff', els: [{ id: 'e', t: 'shape', shape: 'rect', x: 0, y: 600, w: 960, h: 120, fill: '#ff0000' }] }] };
+  const r = await fromPptx(toPptx(deck));
+  assert.deepEqual(r.size, { w: 960, h: 720 });
+  const el = r.slides[0].els.find((/** @type {any} */ e) => e.t === 'shape');
+  assert.deepEqual([el.x, el.y, el.w, el.h], [0, 600, 960, 120]);
+  assert.deepEqual((await fromPptx(toPptx({ slides: deck.slides }))).size, { w: 960, h: 540 });
+  const xml = async (/** @type {any} */ doc) => unzip(toDocx(doc)).get('word/document.xml')?.text();
+  assert.match(await xml({ blocks: [], size: { w: 1123, h: 794 } }), /<w:pgSz w:w="16845" w:h="11910" w:orient="landscape"\/>/);
+  assert.match(await xml({ blocks: [], size: { w: 820, h: 0 } }), /<w:pgSz w:w="11906" w:h="16838"\/>/);
+});
+
 await test('Snappy：字面量、长字面量、重叠回溯复制', () => {
   const src = new TextEncoder().encode('x'.repeat(100) + '你好');
   assert.deepEqual(snappy(snappyEncode(src)), src);

@@ -2270,5 +2270,19 @@ export default {
  "此人不在这张表的分享名单里": "This person is not on this sheet's sharing list",
  "文件已损坏，或者不是这种格式": "The file is corrupted or not in this format",
  "不支持的压缩方式": "Unsupported compression method",
- "打开 / 关闭目录": "Show / hide navigation"
+ "打开 / 关闭目录": "Show / hide navigation",
+ "A4 纵向": "A4 portrait",
+ "A4 横向": "A4 landscape",
+ "宽版": "Wide",
+ "高": "Height",
+ "宽和高要在 {min} 到 {max} 之间": "Width and height must be between {min} and {max}",
+ "应用": "Apply",
+ "页面大小": "Page size",
+ "自定义（像素）": "Custom (pixels)",
+ "📐 页面大小": "📐 Page size",
+ "设置文档页面的宽度和高度": "Set the document page width and height",
+ "高度留空表示自动（随内容变长）。设了高度，打印 / 导出 PDF、Word 时按这个纸张大小。": "Leave the height empty for automatic (grows with the content). With a height set, printing and PDF / Word export use this paper size.",
+ "设置幻灯片的宽度和高度（整份）": "Set the slide width and height (whole deck)",
+ "改大小时，页面上的内容按比例缩放并居中，主题装饰拉伸铺满。": "When the size changes, slide content is scaled proportionally and centered, and theme decorations stretch to fill.",
+ "页面大小已改为 {w} × {h}": "Page size changed to {w} × {h}"
 };

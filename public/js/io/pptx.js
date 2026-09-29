@@ -1,13 +1,13 @@
 /**
  * 幻灯片 ⇄ PowerPoint（.pptx），零依赖。纯函数，不碰 DOM（见 scripts/office.test.mjs）。
  *
- * 坐标：画布 960×540 逻辑像素对应 16:9 的 12192000×6858000 EMU，1 px = 12700 EMU = 1 磅，
- *       所以文字的 size（px）直接就是 PowerPoint 里的字号（磅）。
+ * 坐标：默认画布 960×540 逻辑像素对应 16:9 的 12192000×6858000 EMU，1 px = 12700 EMU = 1 磅，
+ *       所以文字的 size（px）直接就是 PowerPoint 里的字号（磅）。设了 deck.size 就按它的宽高导出。
  * 导出：背景色、文本框（行内格式、对齐、底色、链接）、形状（对应到 PowerPoint 的预设形状）、线条、
  *       图片（按“完整显示”算好位置）、嵌入内容（区域 / 透视表 → PowerPoint 表格，图表 → 图片）、备注。
  *       主题字体写进 PowerPoint 主题，打开后换字体也方便。
  * 导入：按 sldIdLst 的顺序读每一页；占位符的位置、字号、颜色顺着版式 → 母版 → 主题继承；
- *       组合会拆开；不是 16:9 的按比例缩放后居中；表格变成文本框；图表、SmartArt、动画不导入。
+ *       组合会拆开；页面大小按原文件的比例（长边 960，结果里的 size）；表格变成文本框；图表、SmartArt、动画不导入。
  *       图片先放进 media，元素里写 img: '@键'，由调用方上传后换成附件编号。
  */
 
@@ -23,6 +23,12 @@ const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships
 const CT = 'application/vnd.openxmlformats-officedocument.presentationml';
 const EMU = 12700;
 const W = 960, H = 540;
+
+/** 幻灯片页面大小（逻辑像素），没设就是 960×540。 @param {any} deck */
+const deckWH = (deck) => {
+  const n = (/** @type {any} */ v, /** @type {number} */ d) => (Number(v) >= 240 && Number(v) <= 1920 ? Math.round(Number(v)) : d);
+  return { w: n(deck?.size?.w, W), h: n(deck?.size?.h, H) };
+};
 const LINE_SP = 115000;
 
 /** 我们的形状 ↔ PowerPoint 预设形状 */
@@ -64,9 +70,10 @@ const HEX = /^#[0-9a-f]{6}$/i;
 
 // ── 导出 ─────────────────────────────────────────────────────────────────
 
-/** @param {{ slides: any[] }} deck @param {Assets} [assets] @returns {Uint8Array} */
+/** @param {{ slides: any[], size?: { w: number, h: number } }} deck @param {Assets} [assets] @returns {Uint8Array} */
 export function toPptx(deck, assets = {}) {
   const images = assets.images ?? new Map(), embeds = assets.embeds ?? new Map();
+  const size = deckWH(deck);
   const slides = Array.isArray(deck?.slides) && deck.slides.length ? deck.slides : [{ bg: '#ffffff', els: [] }];
   const face = /** @type {Record<string, {latin: string, ea: string}>} */ (FONT_FACE)[assets.font ?? 'sans'] ?? FONT_FACE.sans;
   /** @type {{name: string, data: Uint8Array | string}[]} */ const files = [];
@@ -154,7 +161,7 @@ export function toPptx(deck, assets = {}) {
     + '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>'
     + (hasNotes ? '<p:notesMasterIdLst><p:notesMasterId r:id="rId6"/></p:notesMasterIdLst>' : '')
     + '<p:sldIdLst>' + slides.map((_, i) => `<p:sldId id="${256 + i}" r:id="rIdS${i + 1}"/>`).join('') + '</p:sldIdLst>'
-    + `<p:sldSz cx="${emu(W)}" cy="${emu(H)}"/><p:notesSz cx="6858000" cy="9144000"/>`
+    + `<p:sldSz cx="${emu(size.w)}" cy="${emu(size.h)}"/><p:notesSz cx="6858000" cy="9144000"/>`
     + '<p:defaultTextStyle>' + [1, 2, 3].map((l) => `<a:lvl${l}pPr marL="${(l - 1) * 457200}" algn="l" defTabSz="914400" eaLnBrk="1" latinLnBrk="0" hangingPunct="1">`
       + '<a:defRPr sz="1800" kern="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:defRPr>'
       + `</a:lvl${l}pPr>`).join('') + '</p:defaultTextStyle>'
@@ -407,7 +414,7 @@ function fillOf(spPr, ctx) {
 /**
  * @typedef {{ data: Uint8Array, type: string, name: string }} Media
  * @param {ArrayBuffer | Uint8Array} buf
- * @returns {Promise<{ slides: any[], media: Map<string, Media>, notes: string[], ratio: number }>}
+ * @returns {Promise<{ slides: any[], media: Map<string, Media>, notes: string[], ratio: number, size: { w: number, h: number } }>}
  */
 export async function fromPptx(buf) {
   const zip = unzip(buf);
@@ -419,9 +426,12 @@ export async function fromPptx(buf) {
   const presRels = parseRels(await read(relsOf(main)), pdir);
   const sz = kid(pres, 'p:sldSz');
   const cx = Number(sz?.a.cx) || 12192000, cy = Number(sz?.a.cy) || 6858000;
-  // 等比缩放到 960×540 里，居中
-  const k = Math.min(W / cx, H / cy);
-  const ox = (W - cx * k) / 2, oy = (H - cy * k) / 2;
+  // 页面大小按原文件的比例：长边 960，等比缩放
+  const size = cx >= cy
+    ? { w: W, h: Math.max(240, Math.min(1920, Math.round(W * cy / cx))) }
+    : { w: Math.max(240, Math.min(1920, Math.round(W * cx / cy))), h: W };
+  const k = Math.min(size.w / cx, size.h / cy);
+  const ox = (size.w - cx * k) / 2, oy = (size.h - cy * k) / 2;
   const defaultText = kid(pres, 'p:defaultTextStyle');
 
   /** @type {Map<string, Media>} */ const media = new Map();
@@ -481,7 +491,7 @@ export async function fromPptx(buf) {
       if (typeof f === 'string' && f !== 'none') bg = f;
       else if (f && typeof f === 'object') {
         const key = await pic(p, f.blip);
-        if (key) els.push({ id: uid('e'), t: 'img', img: key, x: 0, y: 0, w: W, h: H });
+        if (key) els.push({ id: uid('e'), t: 'img', img: key, x: 0, y: 0, w: size.w, h: size.h });
       }
       break;
     }
@@ -644,7 +654,7 @@ export async function fromPptx(buf) {
   }
   if (skippedPics) notes.push(t('{n} 张图片的格式浏览器显示不了（如 EMF / WMF），已跳过', { n: skippedPics }));
   if (charts) notes.push(t('{n} 个图表 / SmartArt 没有导入', { n: charts }));
-  return { slides, media, notes, ratio: cx / cy };
+  return { slides, media, notes, ratio: cx / cy, size };
 }
 
 /** @param {any} e */

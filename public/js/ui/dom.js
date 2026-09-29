@@ -73,3 +73,10 @@ export function placeNear(el, x, y) {
  * @param {string | null | undefined} s
  */
 export const plainTitle = (s) => (s ?? '').trim().replace(/^[^\p{L}\p{N}\s]+\s+/u, '').trim();
+
+/** 手机（触屏且屏幕短边 < 768px）。表格、文档、幻灯片在手机上都是只读的，编辑请用电脑。 */
+export function isMobile() {
+  try {
+    return !!globalThis.matchMedia?.('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 768;
+  } catch { return false; }
+}

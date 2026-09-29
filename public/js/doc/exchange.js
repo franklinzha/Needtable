@@ -157,12 +157,12 @@ export async function importDocFile(file, tableId, status) {
 /**
  * 读一个文件 → 幻灯片（已 normDeck 前的原始页；图片已上传）。
  * @param {File} file @param {string} tableId @param {(msg: string) => void} status
- * @returns {Promise<{ slides: any[], notes: string[] }>}
+ * @returns {Promise<{ slides: any[], notes: string[], size: { w: number, h: number } }>}
  */
 export async function importSlidesFile(file, tableId, status) {
   const e = checkFile(file);
   status(t('正在读取 {name}…', { name: file.name }));
-  /** @type {{ slides: any[], media: Map<string, any>, notes: string[] }} */ let r;
+  /** @type {{ slides: any[], media: Map<string, any>, notes: string[], size?: { w: number, h: number } }} */ let r;
   if (e === 'pptx' || e === 'pptm' || e === 'ppsx' || e === 'potx') r = await (await import('../io/pptx.js')).fromPptx(await file.arrayBuffer());
   else if (e === 'key') r = await (await import('../io/iwork.js')).fromKeynote(await file.arrayBuffer());
   else throw new Error(t('不支持 .{ext} 文件。幻灯片可以导入 PowerPoint（.pptx）和 Keynote（.key）', { ext: e }));
@@ -177,7 +177,7 @@ export async function importSlidesFile(file, tableId, status) {
       return el;
     });
   }
-  return { slides: r.slides, notes };
+  return { slides: r.slides, notes, size: r.size ?? { w: 960, h: 540 } };
 }
 
 /** 超过属性大小上限就从后面砍。 @template T @param {T[]} list @param {(l: T[]) => any} wrap @param {string[]} notes @param {string} unit */

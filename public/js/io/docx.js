@@ -20,6 +20,12 @@ const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships
 /** A4 纵向、页边距 2.54 cm 时的版心宽度 */
 const CONTENT_EMU = Math.round(6.27 * 914400);
 const CONTENT_TWIPS = 9026;
+/** 纸张大小：文档设了页面宽高（像素，1px = 15 twips）就用它，否则 A4 纵向。 @param {any} doc */
+function pgSz(doc) {
+  const w = Math.round(Number(doc?.size?.w)), hh = Math.round(Number(doc?.size?.h));
+  if (!(w >= 320 && w <= 2400 && hh >= 320 && hh <= 2400)) return '<w:pgSz w:w="11906" w:h="16838"/>';
+  return `<w:pgSz w:w="${w * 15}" w:h="${hh * 15}"${w > hh ? ' w:orient="landscape"' : ''}/>`;
+}
 /** 文档里缩进一级 24px ≈ 0.25 英寸 */
 const INDENT_TWIPS = 360;
 const MONO = /consolas|courier|menlo|monaco|mono|code/i;
@@ -33,7 +39,7 @@ const TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'quote', 'code', 'ul', 'ol', 
 
 // ── 导出 ─────────────────────────────────────────────────────────────────
 
-/** @param {{ blocks: any[] }} doc @param {Assets} [assets] @returns {Uint8Array} */
+/** @param {{ blocks: any[], size?: { w: number, h: number } }} doc @param {Assets} [assets] @returns {Uint8Array} */
 export function toDocx(doc, assets = {}) {
   const images = assets.images ?? new Map(), embeds = assets.embeds ?? new Map();
   /** @type {string[]} */ const rels = [
@@ -96,7 +102,7 @@ export function toDocx(doc, assets = {}) {
   if (!body.length) body.push('<w:p/>');
 
   const document = HEAD + `<w:document ${W_NS} ${DRAW_NS}><w:body>${body.join('')}`
-    + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="851" w:footer="992" w:gutter="0"/></w:sectPr>'
+    + '<w:sectPr>' + pgSz(doc) + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="851" w:footer="992" w:gutter="0"/></w:sectPr>'
     + '</w:body></w:document>';
   const types = HEAD + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
     + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'

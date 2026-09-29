@@ -2,7 +2,8 @@
  * 文档（kind = 'doc'）：类似 Word 的富文本编辑器。
  *
  * 存储：整份文档是表属性 props.doc（setProp，走同一套 SyncEngine / DO / 权限 / 公开链接）。
- *   { blocks: [{ id, t, runs?, align?, indent?, checked?, img?, w?, cap?, src?, kind?, range?, cfg?, fields?, title? }] }
+ *   { theme?, size?: { w, h }, blocks: [{ id, t, runs?, align?, indent?, checked?, img?, w?, cap?, src?, kind?, range?, cfg?, fields?, title? }] }
+ *   size 是页面大小（像素，h = 0 表示高度自动），不写就是默认的 820 宽、自动高。
  *   t：p h1 h2 h3 quote code ul ol todo（文字块）· hr img embed（整块，不可在里面打字）
  *
  * 编辑器是一整个 contenteditable，每个块是它的一个直接子元素（带 data-id / data-t）。
@@ -10,7 +11,7 @@
  * 有的话按块三方合并（docmerge.js），合并结果重画并立即保存。
  */
 
-import { h } from '../ui/dom.js';
+import { h, isMobile } from '../ui/dom.js';
 import { t as tt } from '../../shared/i18n/i18n.js';
 import { openMenu } from '../ui/menu.js';
 import { uid } from '../../shared/util/uid.js';
@@ -29,6 +30,23 @@ const LIST_TYPES = new Set(['ul', 'ol', 'todo']);
 const TAG = { p: 'p', h1: 'h1', h2: 'h2', h3: 'h3', quote: 'blockquote', code: 'pre', ul: 'div', ol: 'div', todo: 'div' };
 const BLOCK_MENU = [['p', tt('正文')], ['h1', tt('标题 1')], ['h2', tt('标题 2')], ['h3', tt('标题 3')], ['quote', tt('引用')], ['code', tt('代码块')],
   ['ul', tt('• 无序列表')], ['ol', tt('1. 有序列表')], ['todo', tt('☐ 待办')]];
+/** 文档页面：默认大小和范围（像素），常用纸张按 96dpi 换算。 */
+const DOC_W = 820, DOC_MIN = 320, DOC_MAX = 2400;
+const DOC_SIZES = /** @type {const} */ ([
+  [tt('默认'), DOC_W, 0],
+  [tt('A4 纵向'), 794, 1123],
+  [tt('A4 横向'), 1123, 794],
+  ['A5', 559, 794],
+  ['Letter', 816, 1056],
+  [tt('宽版'), 1100, 0],
+]);
+
+/** 文档的页面大小。 @param {any} d @returns {{ w: number, h: number }} */
+export function docSize(d) {
+  const n = (/** @type {any} */ v) => { const x = Math.round(Number(v)); return x >= DOC_MIN && x <= DOC_MAX ? x : 0; };
+  return { w: n(d?.size?.w) || DOC_W, h: n(d?.size?.h) };
+}
+
 const STATE_LABEL = { loading: tt('载入中…'), connecting: tt('连接中…'), syncing: tt('同步中…'), online: tt('已同步'), offline: tt('离线'), readonly: tt('只读') };
 
 /** @param {string} s */
@@ -72,6 +90,52 @@ export function colorBtn(label, title, init, fn) {
   wrap.addEventListener('mousedown', () => { /* 让 input 自己弹出 */ });
   input.addEventListener('change', () => { sw.style.setProperty('background', input.value); fn(input.value); });
   return wrap;
+}
+
+/**
+ * 「页面大小」面板（文档和幻灯片共用）：常用尺寸 + 自定义宽高。高度 0 表示自动（只有文档用）。
+ * @param {HTMLElement} anchor
+ * @param {{
+ *   presets: readonly (readonly [string, number, number])[], cur: { w: number, h: number },
+ *   min: number, max: number, autoH?: boolean, note?: string,
+ *   onPick: (w: number, h: number) => void,
+ * }} o
+ */
+export function sizePop(anchor, o) {
+  const dim = (/** @type {number} */ w, /** @type {number} */ hh) => w + ' × ' + (hh || tt('自动'));
+  const list = h('div', { class: 'dc-sizes' }, ...o.presets.map(([label, w, hh]) => {
+    const on = w === o.cur.w && hh === o.cur.h;
+    const b = h('button', { class: 'dc-size' + (on ? ' dc-size--on' : ''), type: 'button', attrs: { 'aria-pressed': on ? 'true' : 'false' } },
+      h('span', { class: 'dc-size__n', text: label }), h('span', { class: 'dc-size__d', text: dim(w, hh) }));
+    b.addEventListener('click', () => { close?.(); o.onPick(w, hh); });
+    return b;
+  }));
+  const num = (/** @type {string} */ label, /** @type {number} */ v) => /** @type {HTMLInputElement} */ (h('input', {
+    type: 'number', class: 'dc-size__in', value: v ? String(v) : '',
+    attrs: { min: String(o.min), max: String(o.max), step: '1', 'aria-label': label, placeholder: label === tt('高') && o.autoH ? tt('自动') : '' },
+  }));
+  const wIn = num(tt('宽'), o.cur.w), hIn = num(tt('高'), o.cur.h);
+  const err = h('div', { class: 'dc-size__err', attrs: { role: 'alert' } });
+  const apply = () => {
+    const w = Math.round(Number(wIn.value)), raw = hIn.value.trim(), hh = raw === '' && o.autoH ? 0 : Math.round(Number(raw));
+    const ok = (/** @type {number} */ v) => Number.isFinite(v) && v >= o.min && v <= o.max;
+    if (!ok(w) || !(ok(hh) || (o.autoH && hh === 0))) {
+      err.textContent = tt('宽和高要在 {min} 到 {max} 之间', { min: o.min, max: o.max });
+      return;
+    }
+    close?.();
+    o.onPick(w, hh);
+  };
+  for (const i of [wIn, hIn]) i.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+  const okBtn = h('button', { class: 'ui-btn ui-btn--primary', type: 'button', text: tt('应用') });
+  okBtn.addEventListener('click', apply);
+  const close = popover(anchor, h('div', null,
+    h('div', { class: 'dc-pop__t', text: tt('页面大小') }), list,
+    h('div', { class: 'dc-pop__t', text: tt('自定义（像素）') }),
+    h('div', { class: 'dc-size__row' }, h('label', null, tt('宽'), ' ', wIn), h('span', { text: '×' }), h('label', null, tt('高'), ' ', hIn), okBtn),
+    err,
+    o.note ? h('div', { class: 'dc-size__note', text: o.note }) : null), 'dc-pop--size');
+  wIn.focus();
 }
 
 /** @type {(() => void) | null} 当前打开的弹层 */
@@ -132,6 +196,7 @@ export class DocView {
     this.readonly = true;          // 连上、确认有编辑权限之后才打开
     this.loaded = false;
     this.dirty = false;
+    /** 手机上只读（和表格一样） */ this.mobile = isMobile();
     this._timer = 0;
     /** 上次同步到的版本（合并的 base） */ this.base = /** @type {any} */ ({ blocks: [] });
     /** 上次发出去的 JSON：自己的回声不用重画 */ this.lastJson = '';
@@ -149,6 +214,9 @@ export class DocView {
     this.page.append(this.ed, this.startBox);
     s.body.append(this.page);
     /** @type {string | undefined} 文档主题 */ this.theme = undefined;
+    /** @type {{ w: number, h: number } | undefined} 页面大小，undefined = 默认 */ this.size = undefined;
+    /** 打印时的纸张大小（@page） */ this.pageStyle = h('style');
+    document.head.append(this.pageStyle);
     this._buildTools(s.tools);
 
     this.ed.addEventListener('input', () => this._changed());
@@ -169,6 +237,7 @@ export class DocView {
     this.base = this._docOf();    // 空 base 会让合并把每一块都当成「我新增的」，别人的修改全被盖掉
     this._render(this.base, false);
     this._setEditable();
+    if (this.mobile) this.setReadonlyReason(tt('移动端为只读模式，请在电脑上编辑'));
   }
 
   // ── 外部接口（与 Grid 同名，main.js 统一调用） ─────────────────────────────
@@ -189,7 +258,7 @@ export class DocView {
     this.statConn.title = detail ?? '';
     // 第一次同步完成之前不许打字：否则快照一到就会把刚打的字盖掉
     if (s === 'online' || s === 'readonly') this.loaded = true;
-    if (this.sync?.readonly && !this.opts.publicMode) this.setReadonlyReason(tt('只读权限：你可以查看，但不能修改这份文档'));
+    if (this.sync?.readonly && !this.opts.publicMode && !this.mobile) this.setReadonlyReason(tt('只读权限：你可以查看，但不能修改这份文档'));
     this._setEditable();
   }
 
@@ -211,6 +280,7 @@ export class DocView {
     this._ro.disconnect();
     document.removeEventListener('selectionchange', this._onSel);
     this.embeds.dispose();
+    this.pageStyle.remove();
     this.root.remove();
   }
 
@@ -248,7 +318,8 @@ export class DocView {
     this.ed.addEventListener('blur', () => { const r = rangeIn(this.ed); if (r) this._saved = r.cloneRange(); });
     const themeBtn = tbtn(tt('🎨 主题'), tt('文档主题：配色和字体'), () => this._themePop(themeBtn));
     const tplBtn = tbtn(tt('📋 模板'), tt('用模板开始（空文档里替换，否则加在末尾）'), () => this._tplPop(tplBtn));
-    this.editTools.append(h('span', { class: 'dc-sep' }), themeBtn, tplBtn);
+    const sizeBtn = tbtn(tt('📐 页面大小'), tt('设置文档页面的宽度和高度'), () => this._sizePop(sizeBtn));
+    this.editTools.append(h('span', { class: 'dc-sep' }), themeBtn, tplBtn, sizeBtn);
     const exportBtn = tbtn(tt('📤 导出'), tt('导出为 Word（.docx）或 PDF'), () => {
       const r = exportBtn.getBoundingClientRect();
       openMenu([
@@ -284,6 +355,26 @@ export class DocView {
     this.embeds.redrawCharts();
   }
 
+  /** 页面大小：宽度限制页面宽，高度是页面最小高度和打印的纸张高度。 @param {any} size */
+  _setSize(size) {
+    const s = docSize({ size });
+    this.size = s.w === DOC_W && !s.h ? undefined : s;
+    this.page.style.setProperty('--dc-page-w', s.w + 'px');
+    if (s.h) this.page.style.setProperty('--dc-page-h', s.h + 'px'); else this.page.style.removeProperty('--dc-page-h');
+    this.pageStyle.textContent = s.h ? '@media print { @page { size: ' + s.w + 'px ' + s.h + 'px; } }' : '';
+    this.embeds.redrawCharts();
+  }
+
+  /** @param {HTMLElement} anchor */
+  _sizePop(anchor) {
+    if (!this._can()) return;
+    sizePop(anchor, {
+      presets: DOC_SIZES, cur: docSize(this), min: DOC_MIN, max: DOC_MAX, autoH: true,
+      note: tt('高度留空表示自动（随内容变长）。设了高度，打印 / 导出 PDF、Word 时按这个纸张大小。'),
+      onPick: (w, hh) => { this._setSize({ w, h: hh }); this._changed(); },
+    });
+  }
+
   /** @param {HTMLElement} anchor */
   _themePop(anchor) {
     if (!this._can()) return;
@@ -317,7 +408,7 @@ export class DocView {
     if (!this._can()) return;
     const blocks = docFromTemplate(tpl);
     const doc = this._isEmpty() ? { blocks } : { blocks: [...this._serialize().blocks, ...blocks] };
-    this._render({ ...doc, theme: this.theme }, false);
+    this._render({ ...doc, theme: this.theme, size: this.size }, false);
     this._changed();
     this.ed.focus();
     const first = this.ed.querySelector('[data-id="' + CSS.escape(blocks[0].id) + '"]');
@@ -380,6 +471,7 @@ export class DocView {
     }
     this.solid.clear();
     this._setTheme(doc.theme);
+    this._setSize(doc.size);
     const els = [];
     for (const b of doc.blocks ?? []) {
       const el = this._blockEl(b);
@@ -535,7 +627,10 @@ export class DocView {
       if (t === 'todo' && el.dataset.checked === '1') b.checked = true;
       blocks.push(b);
     }
-    return this.theme ? { blocks, theme: this.theme } : { blocks };
+    /** @type {any} */ const out = { blocks };
+    if (this.theme) out.theme = this.theme;
+    if (this.size) out.size = this.size;
+    return out;
   }
 
   // ── 保存与同步 ─────────────────────────────────────────────────────────────
@@ -747,9 +842,9 @@ export class DocView {
       const { blocks, notes } = await X.importDocFile(file, this.tableId, (m) => this.opts.onStatus?.(m));
       if (this.readonly) return;
       const keep = this._isEmpty() ? [] : this._serialize().blocks;
-      const add = X.fitSize(blocks, (l) => ({ blocks: [...keep, ...l], theme: this.theme }), notes, tt('段'));
+      const add = X.fitSize(blocks, (l) => ({ blocks: [...keep, ...l], theme: this.theme, size: this.size }), notes, tt('段'));
       if (!add.length) { this.opts.onStatus?.(notes.length ? tt('没有可以导入的内容：{notes}', { notes: notes.join(tt('；')) }) : tt('没有可以导入的内容'), 'error'); return; }
-      this._render({ blocks: [...keep, ...add], theme: this.theme }, false);
+      this._render({ blocks: [...keep, ...add], theme: this.theme, size: this.size }, false);
       this._changed();
       this._save();
       const first = this.ed.querySelector('[data-id="' + CSS.escape(add[0].id) + '"]');

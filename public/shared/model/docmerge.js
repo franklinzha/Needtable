@@ -73,9 +73,11 @@ export function mergeDoc(base, mine, theirs) {
   return withTheme({ ...(theirs ?? {}), blocks: mergeById(base?.blocks ?? [], mine?.blocks ?? [], theirs?.blocks ?? []) }, base, mine, theirs);
 }
 
-/** 主题：我改过就用我的，否则用远端的。 @param {any} out @param {any} base @param {any} mine @param {any} theirs */
+/** 主题、页面大小：我改过就用我的，否则用远端的。 @param {any} out @param {any} base @param {any} mine @param {any} theirs */
 function withTheme(out, base, mine, theirs) {
-  const t = same(mine?.theme, base?.theme) ? theirs?.theme : mine?.theme;
-  if (t === undefined) delete out.theme; else out.theme = t;
+  for (const k of ['theme', 'size']) {
+    const t = same(mine?.[k], base?.[k]) ? theirs?.[k] : mine?.[k];
+    if (t === undefined) delete out[k]; else out[k] = t;
+  }
   return out;
 }
