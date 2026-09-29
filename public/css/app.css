@@ -377,7 +377,8 @@ div.sec-switch { flex-wrap: wrap; gap: var(--sp-4); cursor: default; }
 .sec-badge--bad  { color: var(--c-danger);  border-color: currentColor; }
 
 /* ── 用户管理页 /yonghuguanli ──────────────────────────────────────────── */
-body.up-body { overflow: auto; }
+/* 底色和原来的弹窗（.sec-panel）一致：链接 / 密码框、输入框用 --c-bg，要和页面底色区分开 */
+body.up-body { overflow: auto; background: var(--c-surface); }
 .up-top {
   position: sticky; top: 0; z-index: 2;
   display: flex; align-items: center; gap: var(--sp-3);

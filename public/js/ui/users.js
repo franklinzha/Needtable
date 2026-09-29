@@ -174,7 +174,7 @@ function listSection(users, settings, refresh) {
 
   const apply = () => {
     filter.q = q.value.trim(); filter.role = role.value; filter.status = status.value;
-    const words = filter.q.toLowerCase().split(/s+/).filter(Boolean);
+    const words = filter.q.toLowerCase().split(/\s+/).filter(Boolean);
     let shown = 0;
     for (const { u, li, text } of rows) {
       const ok = (!filter.role || u.role === filter.role) && (!filter.status || u.status === filter.status)
