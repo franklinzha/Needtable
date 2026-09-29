@@ -151,3 +151,6 @@
 @media (max-width: 720px) {
   .grid__name { width: 100%; }
 }
+
+/* 手机上表格是只读的：功能区的按钮全是灰的，收起来把地方留给表格 */
+.grid--mobile .rb { display: none; }

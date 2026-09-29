@@ -271,6 +271,7 @@ async function reloadTree() {
 function redraw() {
   const home = state.view === 'home';
   el.app.classList.toggle('app--home', home);
+  el.app.classList.remove('app--nav');   // 窄屏抽屉：选了表 / 换了页就收起
   const ws = findWs(state.activeWorkspaceId);
   const hit = state.activeTableId ? findTable(state.activeTableId) : null;
   document.title = (hit ? hit.table.name + ' · ' : !home && ws ? ws.name + ' · ' : '') + state.app.name;

@@ -2269,5 +2269,6 @@ export default {
  "此人不在这个内容的分享名单里": "Esta persona no está en la lista de uso compartido de esta base",
  "此人不在这张表的分享名单里": "Esta persona no está en la lista de uso compartido de esta hoja",
  "文件已损坏，或者不是这种格式": "El archivo está dañado o no tiene este formato",
- "不支持的压缩方式": "Método de compresión no compatible"
+ "不支持的压缩方式": "Método de compresión no compatible",
+ "打开 / 关闭目录": "Mostrar / ocultar navegación"
 };

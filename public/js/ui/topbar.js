@@ -20,6 +20,23 @@ import { t } from '../../shared/i18n/i18n.js';
 export function renderTopbar(root, state, on) {
   root.replaceChildren();
 
+  // 窄屏（手机、竖放的平板）：侧边栏变成从左边滑出的抽屉，这个按钮开关它
+  const app = /** @type {HTMLElement} */ (root.closest('.app') ?? document.body);
+  const nav = document.createElement('button');
+  nav.type = 'button';
+  nav.className = 'topbar__nav';
+  nav.textContent = '☰';
+  nav.title = t('打开 / 关闭目录');
+  nav.setAttribute('aria-label', nav.title);
+  nav.addEventListener('click', () => app.classList.toggle('app--nav'));
+  if (!app.querySelector(':scope > .nav-backdrop')) {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'nav-backdrop';
+    backdrop.addEventListener('click', () => app.classList.remove('app--nav'));
+    app.append(backdrop);
+  }
+  root.append(nav);
+
   // 品牌名就是回主页的入口（窄屏没有侧边栏，只能靠它）
   const brand = document.createElement('a');
   brand.className = 'topbar__brand';
@@ -66,6 +83,29 @@ export function renderTopbar(root, state, on) {
     tag.textContent = 'ADMIN';
     who.append(tag);
   }
+  // 帮助、主题、语言等按钮：宽屏直接排在顶栏上，手机上收进「⋯」菜单
+  const actions = document.createElement('div');
+  actions.className = 'topbar__actions';
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'topbar__logout topbar__more';
+  more.textContent = '⋯';
+  more.title = t('更多选项');
+  more.setAttribute('aria-label', more.title);
+  more.setAttribute('aria-expanded', 'false');
+  const setOpen = (/** @type {boolean} */ open) => {
+    actions.classList.toggle('topbar__actions--open', open);
+    more.setAttribute('aria-expanded', String(open));
+  };
+  more.addEventListener('click', (e) => { e.stopPropagation(); setOpen(!actions.classList.contains('topbar__actions--open')); });
+  // 点菜单外面或点了菜单里的按钮 / 链接就收起；语言下拉框要留着让人选
+  document.addEventListener('click', (e) => {
+    if (!actions.classList.contains('topbar__actions--open')) return;
+    const el = e.target instanceof Element ? e.target : null;
+    if (el && actions.contains(el) && !el.closest('a, button')) return;
+    setOpen(false);
+  });
+  who.append(more, actions);
   // 帮助中心快捷入口：新标签页打开 /help（服务端要求登录，这里能看到按钮就已经登录了）
   const help = document.createElement('a');
   help.className = 'topbar__logout topbar__help';
@@ -74,7 +114,7 @@ export function renderTopbar(root, state, on) {
   help.rel = 'noopener';
   help.textContent = t('帮助中心');
   help.title = t('打开帮助中心（使用说明与全部函数）');
-  who.append(help);
+  actions.append(help);
   // 主题配色：每个人都能选；管理员在同一个面板里设系统默认、加配色
   const theme = document.createElement('button');
   theme.type = 'button';
@@ -84,7 +124,7 @@ export function renderTopbar(root, state, on) {
     const { openThemePanel } = await import('./themes.js');
     openThemePanel(state);
   });
-  who.append(theme);
+  actions.append(theme);
   if (state.user.role === 'admin') {
     // 独立页面（新标签页打开，不打断手上的表格）；带上当前工作区，新建账号时默认「同时加入」它
     const users = document.createElement('a');
@@ -96,7 +136,7 @@ export function renderTopbar(root, state, on) {
     sync();
     users.addEventListener('mousedown', sync);   // 切过工作区之后，点的那一刻再取一次
     users.addEventListener('focus', sync);
-    who.append(users);
+    actions.append(users);
   }
   if (state.user.via === 'password') {
     // 动态码开关与绑定验证器都在这里；Access 模式下登录方式归 Cloudflare 管，不显示。
@@ -105,10 +145,10 @@ export function renderTopbar(root, state, on) {
     sec.className = 'topbar__logout';
     sec.textContent = state.user.role === 'admin' ? t('安全设置') : t('验证器');
     sec.addEventListener('click', () => openSecurityPanel(state.user));
-    who.append(sec, logoutButton());
+    actions.append(sec, logoutButton());
   }
   // 界面语言：存在自己的账号上，和主题配色一样换设备也跟着走
-  who.append(langSelect({ className: 'topbar__lang' }));
+  actions.append(langSelect({ className: 'topbar__lang' }));
   root.append(who);
 }
 

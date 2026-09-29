@@ -146,7 +146,7 @@ export class Grid {
     const status = h('div', { class: 'grid__status' }, this.statConn, this.statSel, this.statSum,
       h('div', { class: 'grid__spacer' }), this.zoomNote, this.statSize);
 
-    this.root = h('div', { class: 'grid' }, bar, this.ribbonHost, fbar, this.body, status);
+    this.root = h('div', { class: 'grid' + (this.mobile ? ' grid--mobile' : '') }, bar, this.ribbonHost, fbar, this.body, status);
     host.append(this.root);
   }
 

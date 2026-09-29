@@ -106,6 +106,18 @@ a.topbar__logout { text-decoration: none; white-space: nowrap; }
 }
 .topbar__lang:hover { color: var(--c-text); border-color: var(--c-text-muted); }
 .topbar__lang option { color: var(--c-text); background: var(--c-surface); }
+.topbar__actions { display: flex; align-items: center; gap: var(--sp-2); }
+/* 窄屏才出现：☰ 开关侧边栏抽屉、⋯ 收起来的按钮 */
+.topbar__nav {
+  display: none; place-items: center;
+  width: 36px; height: 36px; margin-left: calc(-1 * var(--sp-1));
+  font: inherit; font-size: 20px; line-height: 1;
+  color: var(--c-text); background: transparent; border: 0; border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+}
+.topbar__nav:hover { background: var(--c-bg-subtle); }
+.topbar__more { display: none; font-size: 18px; line-height: 1; padding: 4px 10px; }
+.nav-backdrop { display: none; }
 
 /* ── 侧边栏 ─────────────────────────────────────────────────────────────── */
 .sidebar {
@@ -380,18 +392,61 @@ body.up-body { overflow: auto; }
 .up-filter { flex-wrap: wrap; margin-bottom: var(--sp-2); }
 .up-filter > .sec-input { flex: 1 1 200px; }
 
-/* ── 窄屏：侧边栏收起（P6 再做完整移动端） ───────────────────────────────── */
-@media (max-width: 720px) {
+/* ── 平板竖放 / 手机：侧边栏变成抽屉，点 ☰ 从左边滑出 ─────────────────────── */
+@media (max-width: 900px) {
   .app { grid-template-columns: minmax(0, 1fr); grid-template-areas: "topbar" "main"; }
-  .sidebar { display: none; }
-  /* 顶栏放不下：邮箱让位（头像悬停仍可看到），再放不下就横向滚动，别把整页撑宽 */
-  .topbar { gap: var(--sp-2); padding: 0 var(--sp-3); overflow-x: auto; scrollbar-width: none; }
-  .topbar__env { white-space: nowrap; }
+  .app:not(.app--home):not(.app--public) .topbar__nav { display: inline-grid; }
+  .sidebar {
+    position: fixed; left: 0; top: var(--topbar-h); bottom: 0; z-index: var(--z-panel);
+    width: min(300px, 85vw);
+    padding-bottom: calc(var(--sp-3) + env(safe-area-inset-bottom, 0px));
+    box-shadow: var(--shadow-lg);
+    transform: translateX(-105%); visibility: hidden;
+    transition: transform .2s ease, visibility 0s linear .2s;
+  }
+  .app--nav .sidebar { transform: none; visibility: visible; transition: transform .2s ease; }
+  .app--nav:not(.app--home) .nav-backdrop {
+    display: block; position: fixed; inset: var(--topbar-h) 0 0 0; z-index: calc(var(--z-panel) - 1);
+    background: rgb(0 0 0 / .28);
+  }
+  /* 手指点的东西大一点 */
+  .tree__item { min-height: 36px; }
+  /* 顶栏：邮箱让位（头像悬停仍可看到），按钮文字别折行 */
   .topbar__email { display: none; }
-  .topbar__user, .topbar__brand { flex-shrink: 0; }
-  /* 工作区页：没有侧边栏可选，直接列出表 */
+  .topbar__env, .topbar__logout { white-space: nowrap; }
+  /* 工作区页：侧边栏收起来了，直接列出表 */
   .placeholder__hint--wide { display: none; }
   .placeholder__tables { display: flex; }
+}
+@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+  .sidebar, .app--nav .sidebar { transition: none; }
+}
+
+/* ── 手机：顶栏的按钮收进 ⋯ 菜单 ─────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .topbar { gap: var(--sp-2); padding: 0 var(--sp-3); padding-left: max(var(--sp-3), env(safe-area-inset-left, 0px)); padding-right: max(var(--sp-3), env(safe-area-inset-right, 0px)); }
+  .topbar__brand { min-width: 0; }
+  .topbar__brand > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar__env { white-space: nowrap; }
+  .topbar__email { display: none; }
+  .topbar__user { flex-shrink: 0; position: relative; }
+  .topbar__more { display: inline-block; }
+  .topbar__actions {
+    display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: var(--z-panel);
+    flex-direction: column; align-items: stretch; gap: 2px;
+    min-width: 200px; padding: var(--sp-1);
+    background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-md, 10px);
+    box-shadow: var(--shadow-lg);
+  }
+  .topbar__actions--open { display: flex; }
+  .topbar__actions > .topbar__logout, .topbar__actions > .topbar__lang {
+    border-color: transparent; padding: 10px var(--sp-3); text-align: left; font-size: var(--fs-md);
+  }
+  .topbar__actions > .topbar__logout:hover { background: var(--c-bg-subtle); }
+  .topbar__actions > .topbar__lang { border-color: var(--c-border); margin: var(--sp-1); }
+}
+@media (max-width: 440px) {
+  .topbar__user > .topbar__env { display: none; }   /* ADMIN 标记让位给品牌名 */
 }
 
 /* ── 公开只读链接：不给选中、不给打印（劝阻性质，挡不住截图） ─────────────── */
